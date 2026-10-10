@@ -1,5 +1,13 @@
 import { useForm } from "@inertiajs/react";
 import type { FormEvent } from "react";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 
 export type DocumentRequestRow = {
     id: number;
@@ -159,24 +167,18 @@ export default function DocumentRequestTable({
                             <td className="break-words px-2 py-3 sm:px-3 lg:px-4 lg:py-4">
                                 <IdentityBadge status={request.identity_status} />
                                 {request.identity_document_url && (
-                                    <a
-                                        href={request.identity_document_url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="mt-2 block break-words text-xs font-semibold text-emerald-700 underline"
-                                    >
-                                        View ID front
-                                    </a>
+                                    <IdentityPreviewDialog
+                                        url={request.identity_document_url}
+                                        requestId={request.id}
+                                        sideLabel="Front of ID"
+                                    />
                                 )}
                                 {request.identity_document_back_url && (
-                                    <a
-                                        href={request.identity_document_back_url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="mt-1 block break-words text-xs font-semibold text-emerald-700 underline"
-                                    >
-                                        View ID back
-                                    </a>
+                                    <IdentityPreviewDialog
+                                        url={request.identity_document_back_url}
+                                        requestId={request.id}
+                                        sideLabel="Back of ID"
+                                    />
                                 )}
                             </td>
                             <td className="break-words px-2 py-3 text-slate-500 sm:px-3 lg:px-4 lg:py-4">
@@ -227,6 +229,42 @@ export default function DocumentRequestTable({
                 </tbody>
             </table>
         </div>
+    );
+}
+
+function IdentityPreviewDialog({
+    url,
+    requestId,
+    sideLabel,
+}: {
+    url: string;
+    requestId: number;
+    sideLabel: string;
+}) {
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <button
+                    type="button"
+                    className="mt-2 block break-words text-left text-xs font-semibold text-emerald-700 underline"
+                >
+                    View ID {sideLabel === "Front of ID" ? "front" : "back"}
+                </button>
+            </DialogTrigger>
+            <DialogContent className="w-[calc(100%-2rem)] max-w-5xl">
+                <DialogHeader>
+                    <DialogTitle>{sideLabel} - Request #{requestId}</DialogTitle>
+                    <DialogDescription>
+                        Preview of the ID submitted with this request.
+                    </DialogDescription>
+                </DialogHeader>
+                <iframe
+                    src={url}
+                    title={`${sideLabel} preview for request ${requestId}`}
+                    className="h-[70vh] w-full rounded-md border border-slate-200 bg-slate-50 dark:border-slate-700"
+                />
+            </DialogContent>
+        </Dialog>
     );
 }
 
