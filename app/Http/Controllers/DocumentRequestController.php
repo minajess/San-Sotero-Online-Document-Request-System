@@ -105,7 +105,7 @@ class DocumentRequestController extends Controller
             ],
             'purpose' => ['required', 'string', 'max:2000'],
             'payment_method' => ['required', Rule::in(['cash', 'gcash'])],
-            'payment_reference' => ['nullable', 'string', 'max:100'],
+            'payment_reference' => ['required_if:payment_method,gcash', 'nullable', 'string', 'max:100'],
             ...PersonalInformation::validationRules($request->all()),
             'contact_number' => [
                 'required',
@@ -152,7 +152,9 @@ class DocumentRequestController extends Controller
             'zone' => trim($validated['zone']),
             'sex' => $validated['sex'],
             'status' => 'pending',
-            'payment_status' => 'unpaid',
+            'payment_status' => $validated['payment_method'] === 'gcash'
+                ? 'paid'
+                : 'unpaid',
             'identity_status' => 'pending',
             'id_document_front_path' => $frontPath,
             'id_document_back_path' => $backPath,
@@ -294,9 +296,12 @@ class DocumentRequestController extends Controller
     ): StreamedResponse {
         $path = $this->identityImagePath($documentRequest, $side);
         $extension = pathinfo($path, PATHINFO_EXTENSION);
-        $sideSuffix = $side === 'front' && $documentRequest->id_document_front_path === null
-            ? ''
-            : "-{$side}";
+        $hasExplicitSideImage = $side === 'front'
+            ? is_string($documentRequest->id_document_front_path)
+            : is_string($documentRequest->id_document_back_path);
+        $sideSuffix = $hasExplicitSideImage || $side === 'back'
+            ? "-{$side}"
+            : '';
         $filename = "resident-id-request-{$documentRequest->id}{$sideSuffix}.{$extension}";
         $stream = Storage::disk('local')->readStream($path);
 
@@ -637,9 +642,11 @@ class DocumentRequestController extends Controller
     {
         abort_unless(in_array($side, ['front', 'back'], true), 404);
 
-        $path = $side === 'back'
-            ? $documentRequest->id_document_back_path
-            : ($documentRequest->id_document_front_path ?? $documentRequest->id_document_path);
+        if ($side === 'back') {
+            $path = $documentRequest->id_document_back_path ?? $documentRequest->id_document_path ?? $documentRequest->id_document_front_path;
+        } else {
+            $path = $documentRequest->id_document_front_path ?? $documentRequest->id_document_path;
+        }
 
         abort_unless(
             is_string($path)

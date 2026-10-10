@@ -55,7 +55,7 @@ test('residents can submit a document request with a payment method', function (
         'document_type_id' => $documentType->id,
         'status' => 'pending',
         'payment_method' => 'gcash',
-        'payment_status' => 'unpaid',
+        'payment_status' => 'paid',
         'payment_reference' => 'GCASH-123456',
         'identity_status' => 'pending',
         'contact_number' => '09171234567',
@@ -81,6 +81,25 @@ test('residents can submit a document request with a payment method', function (
             ->where('requests.0.payment_method', 'gcash'))
         ->assertDontSee('id_document_path')
         ->assertDontSee('identity_document_url');
+});
+
+test('residents must provide a GCash reference number to submit a request', function () {
+    $resident = User::factory()->create(['role' => 'resident']);
+    $documentType = DocumentType::query()->firstOrFail();
+
+    $this->actingAs($resident)
+        ->post(route('resident.requests.store'), [
+            ...requestPersonalDetails(),
+            'document_type_id' => $documentType->id,
+            'purpose' => 'Employment requirement',
+            'payment_method' => 'gcash',
+            'id_is_valid' => true,
+            'id_document_front' => requestIdentityImage('resident-id-front.png'),
+            'id_document_back' => requestIdentityImage('resident-id-back.png'),
+        ])
+        ->assertSessionHasErrors('payment_reference');
+
+    $this->assertDatabaseCount('document_requests', 0);
 });
 
 test('only residents can submit document requests', function () {
@@ -798,6 +817,15 @@ test('only secretaries can download a resident ID from private storage', functio
         ->assertHeader(
             'Content-Disposition',
             "inline; filename=\"resident-id-request-{$documentRequest->id}.pdf\"",
+        );
+    $this->get(route('secretary.requests.identity.back', $documentRequest))
+        ->assertOk()
+        ->assertSee('/brgyLogo.png?v=2');
+    $this->get(route('secretary.requests.identity.image.back', $documentRequest))
+        ->assertOk()
+        ->assertHeader(
+            'Content-Disposition',
+            "inline; filename=\"resident-id-request-{$documentRequest->id}-back.pdf\"",
         );
     $this->assertDatabaseHas('activity_logs', [
         'actor_id' => $secretary->id,

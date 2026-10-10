@@ -31,7 +31,7 @@ export default function CreateDocumentRequest({
     const form = useForm<{
         document_type_id: number | "";
         purpose: string;
-        payment_method: "cash" | "gcash";
+        payment_method: "cash" | "gcash" | "";
         payment_reference: string;
         contact_number: string;
         first_name: string;
@@ -48,7 +48,7 @@ export default function CreateDocumentRequest({
     }>({
         document_type_id: "",
         purpose: "",
-        payment_method: "cash",
+        payment_method: "",
         payment_reference: "",
         contact_number: resident.contact_number ?? "",
         first_name: resident.first_name ?? "",
@@ -262,6 +262,10 @@ export default function CreateDocumentRequest({
                             <input
                                 required
                                 type="checkbox"
+                                disabled={
+                                    !form.data.id_document_front ||
+                                    !form.data.id_document_back
+                                }
                                 checked={form.data.id_is_valid}
                                 onChange={(event) =>
                                     form.setData("id_is_valid", event.target.checked)
@@ -300,7 +304,7 @@ export default function CreateDocumentRequest({
                                     <span className="mt-1 block pl-6 text-xs text-slate-500">
                                         {method === "cash"
                                             ? "Pay at the Barangay Hall."
-                                            : "GCash payment is verified by the secretary."}
+                                            : "Requests with a GCash reference are marked as paid."}
                                     </span>
                                 </label>
                             ))}
@@ -314,8 +318,9 @@ export default function CreateDocumentRequest({
 
                     {form.data.payment_method === "gcash" && (
                         <label className="block text-sm font-semibold">
-                            GCash reference number (optional)
+                            GCash reference number
                             <input
+                                required
                                 value={form.data.payment_reference}
                                 onChange={(event) =>
                                     form.setData("payment_reference", event.target.value)
@@ -324,6 +329,9 @@ export default function CreateDocumentRequest({
                                 className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal"
                                 placeholder="Enter your transaction reference"
                             />
+                            {form.errors.payment_reference && (
+                                <FieldError message={form.errors.payment_reference} />
+                            )}
                             <span className="mt-1 block font-normal text-slate-500">
                                 This system records your preferred method and reference. It does not
                                 charge GCash automatically.
@@ -335,13 +343,20 @@ export default function CreateDocumentRequest({
                         <FileText className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
                         <p>
                             Your request will be marked pending until the secretary reviews it.
-                            Payment is recorded by the barangay staff.
+                            Cash payments are recorded by the barangay staff.
                         </p>
                     </div>
 
                     <button
                         type="submit"
-                        disabled={form.processing || documentTypes.length === 0}
+                        disabled={
+                            form.processing ||
+                            documentTypes.length === 0 ||
+                            !form.data.id_is_valid ||
+                            !form.data.payment_method ||
+                            (form.data.payment_method === "gcash" &&
+                                !form.data.payment_reference.trim())
+                        }
                         className="w-full rounded-xl bg-emerald-600 px-8 py-3 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:ml-auto sm:block sm:w-fit sm:min-w-56"
                     >
                         {form.processing ? "Submitting…" : "Submit request"}
