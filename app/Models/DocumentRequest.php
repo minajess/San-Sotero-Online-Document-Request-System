@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property string $payment_method
  * @property string $payment_status
  * @property string|null $payment_reference
+ * @property string|null $payment_receipt_path
  * @property string|null $contact_number
  * @property string|null $first_name
  * @property string|null $middle_name
@@ -43,6 +44,7 @@ use Illuminate\Support\Carbon;
     'payment_method',
     'payment_status',
     'payment_reference',
+    'payment_receipt_path',
     'contact_number',
     'first_name',
     'middle_name',
@@ -65,6 +67,7 @@ use Illuminate\Support\Carbon;
     'id_document_path',
     'id_document_front_path',
     'id_document_back_path',
+    'payment_receipt_path',
 ])]
 class DocumentRequest extends Model
 {

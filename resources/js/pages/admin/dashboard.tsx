@@ -203,7 +203,7 @@ export default function AdminDashboard() {
 
                             <ManagementCard
                                 icon={BarChart3}
-                                title="Reports"
+                                title="Activity"
                                 description="View system activity and document request statistics."
                                 href="/admin/reports"
                             />

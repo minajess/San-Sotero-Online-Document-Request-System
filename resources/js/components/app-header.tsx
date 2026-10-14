@@ -55,7 +55,7 @@ const adminNavItems: NavItem[] = [
     { title: "Staff", href: "/admin/staff", icon: UserCog },
     { title: "Document Services", href: "/admin/document-types", icon: FileText },
     { title: "Requests", href: "/admin/requests", icon: ClipboardList },
-    { title: "Reports", href: "/admin/reports", icon: BarChart3 },
+    { title: "Activity", href: "/admin/reports", icon: BarChart3 },
     { title: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
@@ -72,201 +72,176 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
     const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
 
     return (
-        <>
-            <div className="border-b border-sidebar-border/80">
-                <div className="mx-auto flex h-16 w-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
-                    {/* Mobile Menu */}
-                    <div className="lg:hidden">
-                        <Sheet>
-                            <SheetTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="mr-2 h-[34px] w-[34px]"
-                                >
-                                    <Menu className="h-5 w-5" />
-                                </Button>
-                            </SheetTrigger>
-                            <SheetContent
-                                side="left"
-                                className="flex h-full w-64 flex-col items-stretch justify-between bg-sidebar"
+        <header className="sticky top-0 z-50 border-b border-emerald-100/80 bg-white/80 backdrop-blur-xl">
+            <div className="mx-auto flex h-16 w-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
+                <div className="lg:hidden">
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="mr-2 h-[34px] w-[34px]"
                             >
-                                <SheetTitle className="sr-only">Navigation menu</SheetTitle>
-                                <SheetHeader className="flex justify-start text-left">
-                                    <Link href="/" aria-label="Barangay San Sotero home">
-                                        <AppLogoIcon className="h-6 w-6 rounded-full object-contain" />
-                                    </Link>
-                                </SheetHeader>
-                                <div className="flex h-full flex-1 flex-col space-y-4 p-4">
-                                    <div className="flex h-full flex-col justify-between text-sm">
-                                        <div className="flex flex-col space-y-4">
-                                            {mainNavItems.map((item) => (
+                                <Menu className="h-5 w-5" />
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent
+                            side="left"
+                            className="flex h-full w-64 flex-col items-stretch justify-between bg-sidebar"
+                        >
+                            <SheetTitle className="sr-only">Navigation menu</SheetTitle>
+                            <SheetHeader className="flex justify-start text-left">
+                                <Link href="/" aria-label="Barangay San Sotero home">
+                                    <AppLogoIcon className="h-6 w-6 rounded-full object-contain" />
+                                </Link>
+                            </SheetHeader>
+                            <div className="flex h-full flex-1 flex-col space-y-4 p-4">
+                                <div className="flex h-full flex-col justify-between text-sm">
+                                    <div className="flex flex-col space-y-4">
+                                        {mainNavItems.map((item) => (
+                                            <Link
+                                                key={item.title}
+                                                href={item.href}
+                                                className="flex items-center space-x-2 font-medium"
+                                            >
+                                                {item.icon && <item.icon className="h-5 w-5" />}
+                                                <span>{item.title}</span>
+                                            </Link>
+                                        ))}
+                                        {auth.user?.role === "resident" && (
+                                            <Link
+                                                href="/resident/notifications"
+                                                className="flex items-center gap-2 font-medium"
+                                            >
+                                                <Bell className="h-5 w-5" />
+                                                <span>Notifications</span>
+                                                {unreadNotificationsCount > 0 && (
+                                                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
+                                                        {unreadNotificationsCount}
+                                                    </span>
+                                                )}
+                                            </Link>
+                                        )}
+                                        {auth.user?.role === "secretary" && (
+                                            <>
+                                                <Link
+                                                    href="/secretary/requests"
+                                                    className="flex items-center gap-2 font-medium"
+                                                >
+                                                    <FileClock className="h-5 w-5" />
+                                                    <span>Process requests</span>
+                                                </Link>
+                                                <Link
+                                                    href="/secretary/processed-documents"
+                                                    className="flex items-center gap-2 font-medium"
+                                                >
+                                                    <FileCheck2 className="h-5 w-5" />
+                                                    <span>Processed documents reports</span>
+                                                </Link>
+                                                <Link
+                                                    href="/secretary/claimed-documents"
+                                                    className="flex items-center gap-2 font-medium"
+                                                >
+                                                    <ClipboardCheck className="h-5 w-5" />
+                                                    <span>Claimed document records</span>
+                                                </Link>
+                                            </>
+                                        )}
+                                        {auth.user?.role === "super_admin" &&
+                                            adminNavItems.map((item) => (
                                                 <Link
                                                     key={item.title}
                                                     href={item.href}
-                                                    className="flex items-center space-x-2 font-medium"
+                                                    className="flex items-center gap-2 font-medium"
                                                 >
-                                                    {item.icon && <item.icon className="h-5 w-5" />}
+                                                    {item.icon && (
+                                                        <item.icon className="h-5 w-5" />
+                                                    )}
                                                     <span>{item.title}</span>
                                                 </Link>
                                             ))}
-                                            {auth.user?.role === "resident" && (
-                                                <Link
-                                                    href="/resident/notifications"
-                                                    className="flex items-center gap-2 font-medium"
-                                                >
-                                                    <Bell className="h-5 w-5" />
-                                                    <span>Notifications</span>
-                                                    {unreadNotificationsCount > 0 && (
-                                                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
-                                                            {unreadNotificationsCount}
-                                                        </span>
-                                                    )}
-                                                </Link>
-                                            )}
-                                            {auth.user?.role === "secretary" && (
-                                                <>
-                                                    <Link
-                                                        href="/secretary/requests"
-                                                        className="flex items-center gap-2 font-medium"
-                                                    >
-                                                        <FileClock className="h-5 w-5" />
-                                                        <span>Process requests</span>
-                                                    </Link>
-                                                    <Link
-                                                        href="/secretary/processed-documents"
-                                                        className="flex items-center gap-2 font-medium"
-                                                    >
-                                                        <FileCheck2 className="h-5 w-5" />
-                                                        <span>Processed documents reports</span>
-                                                    </Link>
-                                                    <Link
-                                                        href="/secretary/claimed-documents"
-                                                        className="flex items-center gap-2 font-medium"
-                                                    >
-                                                        <ClipboardCheck className="h-5 w-5" />
-                                                        <span>Claimed document records</span>
-                                                    </Link>
-                                                </>
-                                            )}
-                                            {auth.user?.role === "super_admin" &&
-                                                adminNavItems.map((item) => (
-                                                    <Link
-                                                        key={item.title}
-                                                        href={item.href}
-                                                        className="flex items-center gap-2 font-medium"
-                                                    >
-                                                        {item.icon && (
-                                                            <item.icon className="h-5 w-5" />
-                                                        )}
-                                                        <span>{item.title}</span>
-                                                    </Link>
-                                                ))}
-                                        </div>
-
                                     </div>
                                 </div>
-                            </SheetContent>
-                        </Sheet>
-                    </div>
+                            </div>
+                        </SheetContent>
+                    </Sheet>
+                </div>
 
-                    <AppLogo />
+                <AppLogo />
 
-                    {/* Desktop Navigation */}
-                    <div className="ml-6 hidden h-full items-center space-x-6 lg:flex">
-                        <NavigationMenu className="flex h-full items-stretch">
-                            <NavigationMenuList className="flex h-full items-stretch space-x-2">
-                                {mainNavItems.map((item, index) => (
-                                    <NavigationMenuItem
-                                        key={index}
-                                        className="relative flex h-full items-center"
-                                    >
-                                        <Link
-                                            href={item.href}
-                                            className={cn(
-                                                navigationMenuTriggerStyle(),
-                                                whenCurrentUrl(item.href, activeItemStyles),
-                                                "h-9 cursor-pointer px-3",
-                                            )}
-                                        >
-                                            {item.icon && <item.icon className="mr-2 h-4 w-4" />}
-                                            {item.title}
-                                        </Link>
-                                        {isCurrentUrl(item.href) && (
-                                            <div className="absolute bottom-0 left-0 h-0.5 w-full translate-y-px bg-black dark:bg-white"></div>
+                <div className="ml-6 hidden h-full items-center space-x-6 lg:flex">
+                    <NavigationMenu className="flex h-full items-stretch">
+                        <NavigationMenuList className="flex h-full items-stretch space-x-2">
+                            {mainNavItems.map((item, index) => (
+                                <NavigationMenuItem
+                                    key={index}
+                                    className="relative flex h-full items-center"
+                                >
+                                    <Link
+                                        href={item.href}
+                                        className={cn(
+                                            navigationMenuTriggerStyle(),
+                                            whenCurrentUrl(item.href, activeItemStyles),
+                                            "h-9 cursor-pointer px-3",
                                         )}
-                                    </NavigationMenuItem>
-                                ))}
-                                {auth.user?.role === "resident" && (
-                                    <NavigationMenuItem className="relative flex h-full items-center">
-                                        <Link
-                                            href="/resident/notifications"
-                                            aria-label={
-                                                unreadNotificationsCount > 0
-                                                    ? `Notifications, ${unreadNotificationsCount} unread`
-                                                    : "Notifications"
-                                            }
-                                            className={cn(
-                                                navigationMenuTriggerStyle(),
-                                                whenCurrentUrl(
-                                                    "/resident/notifications",
-                                                    activeItemStyles,
-                                                ),
-                                                "relative h-9 cursor-pointer px-3",
-                                            )}
-                                        >
-                                            <Bell className="mr-2 h-4 w-4" />
-                                            Notifications
-                                            {unreadNotificationsCount > 0 && (
-                                                <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
-                                                    {unreadNotificationsCount}
-                                                </span>
-                                            )}
-                                        </Link>
-                                    </NavigationMenuItem>
-                                )}
-                                {auth.user?.role === "secretary" && (
-                                    <>
-                                        {[
-                                            {
-                                                title: "Process requests",
-                                                href: "/secretary/requests",
-                                                icon: FileClock,
-                                            },
-                                            {
-                                                title: "Processed documents reports",
-                                                href: "/secretary/processed-documents",
-                                                icon: FileCheck2,
-                                            },
-                                            {
-                                                title: "Claimed document records",
-                                                href: "/secretary/claimed-documents",
-                                                icon: ClipboardCheck,
-                                            },
-                                        ].map((item) => (
-                                            <NavigationMenuItem
-                                                key={item.href}
-                                                className="relative flex h-full items-center"
-                                            >
-                                                <Link
-                                                    href={item.href}
-                                                    className={cn(
-                                                        navigationMenuTriggerStyle(),
-                                                        whenCurrentUrl(item.href, activeItemStyles),
-                                                        "h-9 cursor-pointer px-3",
-                                                    )}
-                                                >
-                                                    <item.icon className="mr-2 h-4 w-4" />
-                                                    {item.title}
-                                                </Link>
-                                            </NavigationMenuItem>
-                                        ))}
-                                    </>
-                                )}
-                                {auth.user?.role === "super_admin" &&
-                                    adminNavItems.map((item) => (
+                                    >
+                                        {item.icon && <item.icon className="mr-2 h-4 w-4" />}
+                                        {item.title}
+                                    </Link>
+                                    {isCurrentUrl(item.href) && (
+                                        <div className="absolute bottom-0 left-0 h-0.5 w-full translate-y-px bg-black dark:bg-white"></div>
+                                    )}
+                                </NavigationMenuItem>
+                            ))}
+                            {auth.user?.role === "resident" && (
+                                <NavigationMenuItem className="relative flex h-full items-center">
+                                    <Link
+                                        href="/resident/notifications"
+                                        aria-label={
+                                            unreadNotificationsCount > 0
+                                                ? `Notifications, ${unreadNotificationsCount} unread`
+                                                : "Notifications"
+                                        }
+                                        className={cn(
+                                            navigationMenuTriggerStyle(),
+                                            whenCurrentUrl(
+                                                "/resident/notifications",
+                                                activeItemStyles,
+                                            ),
+                                            "relative h-9 cursor-pointer px-3",
+                                        )}
+                                    >
+                                        <Bell className="mr-2 h-4 w-4" />
+                                        Notifications
+                                        {unreadNotificationsCount > 0 && (
+                                            <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
+                                                {unreadNotificationsCount}
+                                            </span>
+                                        )}
+                                    </Link>
+                                </NavigationMenuItem>
+                            )}
+                            {auth.user?.role === "secretary" && (
+                                <>
+                                    {[
+                                        {
+                                            title: "Process requests",
+                                            href: "/secretary/requests",
+                                            icon: FileClock,
+                                        },
+                                        {
+                                            title: "Processed documents reports",
+                                            href: "/secretary/processed-documents",
+                                            icon: FileCheck2,
+                                        },
+                                        {
+                                            title: "Claimed document records",
+                                            href: "/secretary/claimed-documents",
+                                            icon: ClipboardCheck,
+                                        },
+                                    ].map((item) => (
                                         <NavigationMenuItem
-                                            key={item.title}
+                                            key={item.href}
                                             className="relative flex h-full items-center"
                                         >
                                             <Link
@@ -277,18 +252,40 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                                     "h-9 cursor-pointer px-3",
                                                 )}
                                             >
-                                                {item.icon && (
-                                                    <item.icon className="mr-2 h-4 w-4" />
-                                                )}
+                                                <item.icon className="mr-2 h-4 w-4" />
                                                 {item.title}
                                             </Link>
                                         </NavigationMenuItem>
                                     ))}
-                            </NavigationMenuList>
-                        </NavigationMenu>
-                    </div>
+                                </>
+                            )}
+                            {auth.user?.role === "super_admin" &&
+                                adminNavItems.map((item) => (
+                                    <NavigationMenuItem
+                                        key={item.title}
+                                        className="relative flex h-full items-center"
+                                    >
+                                        <Link
+                                            href={item.href}
+                                            className={cn(
+                                                navigationMenuTriggerStyle(),
+                                                whenCurrentUrl(item.href, activeItemStyles),
+                                                "h-9 cursor-pointer px-3",
+                                            )}
+                                        >
+                                            {item.icon && (
+                                                <item.icon className="mr-2 h-4 w-4" />
+                                            )}
+                                            {item.title}
+                                        </Link>
+                                    </NavigationMenuItem>
+                                ))}
+                        </NavigationMenuList>
+                    </NavigationMenu>
+                </div>
 
-                    <div className="ml-auto flex items-center space-x-2">
+                <div className="ml-auto flex items-center space-x-2">
+                    {auth.user?.role !== "resident" && (
                         <div className="relative flex items-center space-x-1">
                             <Button
                                 variant="ghost"
@@ -298,27 +295,28 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                 <Search className="!size-5 opacity-80 group-hover:opacity-100" />
                             </Button>
                         </div>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="size-10 rounded-full p-1">
-                                    <Avatar className="size-8 overflow-hidden rounded-full">
-                                        <AvatarImage
-                                            src={auth.user?.avatar}
-                                            alt={auth.user?.name}
-                                        />
-                                        <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
-                                            {getInitials(auth.user?.name ?? "")}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="w-56" align="end">
-                                {auth.user && <UserMenuContent user={auth.user} />}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
+                    )}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="size-10 rounded-full p-1">
+                                <Avatar className="size-8 overflow-hidden rounded-full">
+                                    <AvatarImage
+                                        src={auth.user?.avatar}
+                                        alt={auth.user?.name}
+                                    />
+                                    <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
+                                        {getInitials(auth.user?.name ?? "")}
+                                    </AvatarFallback>
+                                </Avatar>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="w-56" align="end">
+                            {auth.user && <UserMenuContent user={auth.user} />}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
+
             {breadcrumbs.length > 1 && (
                 <div className="flex w-full border-b border-sidebar-border/70">
                     <div className="mx-auto flex h-12 w-full max-w-7xl items-center justify-start px-4 text-neutral-500 sm:px-6 lg:px-8">
@@ -326,6 +324,6 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                     </div>
                 </div>
             )}
-        </>
+        </header>
     );
 }

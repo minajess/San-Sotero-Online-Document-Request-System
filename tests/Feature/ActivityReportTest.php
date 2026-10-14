@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\ActivityLog;
+use App\Models\DocumentType;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -20,6 +21,42 @@ test('super admins can view paginated system activity reports', function () {
             ->where('summary.totalActivities', 1)
             ->has('activities.data', 1)
             ->where('activities.data.0.description', 'Submitted a Barangay Clearance request.'));
+});
+
+test('super admins can search activity reports by requester name', function () {
+    $admin = User::factory()->create(['role' => 'super_admin']);
+    $resident = User::factory()->create(['role' => 'resident']);
+    $documentType = DocumentType::query()->firstOrFail();
+
+    $documentRequest = $resident->documentRequests()->create([
+        'document_type_id' => $documentType->id,
+        'purpose' => 'Employment requirement',
+        'status' => 'pending',
+        'payment_method' => 'cash',
+        'payment_status' => 'unpaid',
+        'first_name' => 'Maria',
+        'middle_name' => 'Clara',
+        'surname' => 'Santos',
+    ]);
+    ActivityLog::record(
+        $resident,
+        'request.submitted',
+        'Submitted a document request.',
+        $documentRequest,
+    );
+    ActivityLog::record(
+        $resident,
+        'auth.login',
+        'Signed in.',
+    );
+
+    $this->actingAs($admin)
+        ->get(route('admin.reports', ['search' => 'Maria Santos']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('admin/reports')
+            ->where('search', 'Maria Santos')
+            ->has('activities.data', 1)
+            ->where('activities.data.0.description', 'Submitted a document request.'));
 });
 
 test('residents cannot access admin reports or secretary processed document reports', function () {

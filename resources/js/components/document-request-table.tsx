@@ -1,5 +1,6 @@
 import { useForm } from "@inertiajs/react";
-import type { FormEvent } from "react";
+import { useState } from "react";
+import { Search } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -15,7 +16,7 @@ export type DocumentRequestRow = {
     status: string;
     payment_method: "cash" | "gcash";
     payment_status: "unpaid" | "paid";
-    payment_reference: string | null;
+    payment_receipt_url?: string | null;
     identity_status: "pending" | "verified" | "rejected";
     identity_status_locked: boolean;
     identity_document_url?: string | null;
@@ -30,10 +31,12 @@ export type DocumentRequestRow = {
         sex: string | null;
         contact_number: string | null;
     };
+    first_name?: string | null;
+    middle_name?: string | null;
+    surname?: string | null;
     ready_at: string | null;
     claimed_at?: string | null;
     claimed_by_name?: string | null;
-    ready_at_input?: string;
     created_at: string;
     resident?: {
         name: string;
@@ -48,47 +51,94 @@ export type DocumentRequestRow = {
 export default function DocumentRequestTable({
     requests,
     canProcess = false,
+    showRequesterSearch = true,
 }: {
     requests: DocumentRequestRow[];
     canProcess?: boolean;
+    showRequesterSearch?: boolean;
 }) {
-    if (requests.length === 0) {
-        return (
-            <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center dark:border-slate-800 dark:bg-slate-900">
-                <h2 className="font-bold">No document requests yet</h2>
-                <p className="mt-2 text-sm text-slate-500">
-                    New requests will appear here when a resident submits one.
-                </p>
-            </div>
-        );
-    }
+    const [search, setSearch] = useState("");
+    const searchTerms = search.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    const filteredRequests = requests.filter((request) => {
+        const requesterName = [
+            request.requester_details?.first_name,
+            request.requester_details?.middle_name,
+            request.requester_details?.surname,
+            request.first_name,
+            request.middle_name,
+            request.surname,
+            request.claimed_by_name,
+            request.resident?.name,
+        ]
+            .filter(Boolean)
+            .join(" ")
+            .toLocaleLowerCase();
+
+        return searchTerms.every((term) => requesterName.includes(term));
+    });
 
     return (
-        <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-            <table className="w-full table-fixed text-left text-xs sm:text-sm">
+        <div className="w-full overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+            {showRequesterSearch && (
+                <div className="border-b border-slate-200 p-3 dark:border-slate-800">
+                    <label className="block max-w-md text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Search requester name
+                        <div className="relative mt-1">
+                            <Search
+                                aria-hidden="true"
+                                className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400"
+                            />
+                            <input
+                                type="search"
+                                value={search}
+                                onChange={(event) => setSearch(event.target.value)}
+                                placeholder="Enter requester name"
+                                className="w-full rounded-lg border border-slate-300 bg-white py-2 pr-3 pl-10 font-normal text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                            />
+                        </div>
+                    </label>
+                </div>
+            )}
+            {filteredRequests.length === 0 ? (
+                <div className="p-10 text-center">
+                    <h2 className="font-bold text-slate-900 dark:text-slate-100">
+                        {requests.length === 0
+                            ? "No document requests yet"
+                            : "No requests match that requester name"}
+                    </h2>
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                        {requests.length === 0
+                            ? "New requests will appear here when a resident submits one."
+                            : "Try another name or clear the search."}
+                    </p>
+                </div>
+            ) : (
+            <table
+                className={`w-full table-fixed text-left text-xs sm:text-sm ${
+                    canProcess ? "min-w-[1200px]" : "min-w-[1000px]"
+                }`}
+            >
                 <colgroup>
                     {canProcess ? (
                         <>
-                            <col className="w-[15%]" />
-                            <col className="w-[9%]" />
-                            <col className="w-[8%]" />
+                            <col className="w-[16%]" />
                             <col className="w-[10%]" />
                             <col className="w-[9%]" />
-                            <col className="w-[7%]" />
+                            <col className="w-[12%]" />
                             <col className="w-[11%]" />
-                            <col className="w-[9%]" />
-                            <col className="w-[22%]" />
+                            <col className="w-[14%]" />
+                            <col className="w-[10%]" />
+                            <col className="w-[18%]" />
                         </>
                     ) : (
                         <>
-                            <col className="w-[17%]" />
-                            <col className="w-[12%]" />
-                            <col className="w-[12%]" />
-                            <col className="w-[9%]" />
+                            <col className="w-[19%]" />
+                            <col className="w-[13%]" />
+                            <col className="w-[13%]" />
                             <col className="w-[11%]" />
-                            <col className="w-[9%]" />
-                            <col className="w-[15%]" />
-                            <col className="w-[15%]" />
+                            <col className="w-[12%]" />
+                            <col className="w-[16%]" />
+                            <col className="w-[16%]" />
                         </>
                     )}
                 </colgroup>
@@ -101,7 +151,6 @@ export default function DocumentRequestTable({
                             "ID verification",
                             "Submitted",
                             "Status",
-                            "Claim time",
                             "Payment",
                             ...(canProcess ? ["Process"] : []),
                         ].map((heading) => (
@@ -115,17 +164,17 @@ export default function DocumentRequestTable({
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {requests.map((request) => (
+                    {filteredRequests.map((request) => (
                         <tr key={request.id} className="align-top">
-                            <td className="break-words px-2 py-3 sm:px-3 lg:px-4 lg:py-4">
+                            <td className="break-words px-2 py-3 text-slate-900 dark:text-slate-100 sm:px-3 lg:px-4 lg:py-4">
                                 <p className="font-semibold">{request.resident?.name ?? "You"}</p>
                                 {request.resident?.email && (
-                                    <p className="mt-1 break-all text-xs text-slate-500">
+                                    <p className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">
                                         {request.resident.email}
                                     </p>
                                 )}
                                 {request.requester_details && (
-                                    <div className="mt-2 space-y-1 break-words text-xs text-slate-600">
+                                    <div className="mt-2 space-y-1 break-words text-xs text-slate-600 dark:text-slate-300">
                                         <p>
                                             {[
                                                 request.requester_details.first_name,
@@ -149,15 +198,15 @@ export default function DocumentRequestTable({
                                         <p>
                                             {request.requester_details.sex}
                                             {request.requester_details.birthdate
-                                                ? ` · ${formatDate(request.requester_details.birthdate)}`
+                                                ? ` · ${formatBirthdate(request.requester_details.birthdate)}`
                                                 : ""}
                                         </p>
                                     </div>
                                 )}
                             </td>
-                            <td className="break-words px-2 py-3 sm:px-3 lg:px-4 lg:py-4">
+                            <td className="break-words px-2 py-3 text-slate-900 dark:text-slate-100 sm:px-3 lg:px-4 lg:py-4">
                                 <p className="font-medium">{request.document_type.name}</p>
-                                <p className="mt-1 text-xs text-slate-500">
+                                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                                     Fee: {formatFee(request.document_type.fee)}
                                 </p>
                             </td>
@@ -181,42 +230,41 @@ export default function DocumentRequestTable({
                                     />
                                 )}
                             </td>
-                            <td className="break-words px-2 py-3 text-slate-500 sm:px-3 lg:px-4 lg:py-4">
+                            <td className="break-words px-2 py-3 text-slate-500 dark:text-slate-400 sm:px-3 lg:px-4 lg:py-4">
                                 {formatDate(request.created_at)}
                             </td>
                             <td className="break-words px-2 py-3 sm:px-3 lg:px-4 lg:py-4">
-                                <StatusBadge status={request.status} />
-                            </td>
-                            <td className="break-words px-2 py-3 text-slate-600 dark:text-slate-300 sm:px-3 lg:px-4 lg:py-4">
-                                {request.status === "claimed" ? (
-                                    <div>
-                                        <p className="font-medium text-emerald-700">
-                                            Claimed
-                                            {request.claimed_at
-                                                ? ` · ${formatDate(request.claimed_at)}`
-                                                : ""}
-                                        </p>
+                                <StatusBadge
+                                    status={
+                                        request.identity_status === "rejected" &&
+                                        request.status !== "claimed"
+                                            ? "rejected"
+                                            : request.status
+                                    }
+                                />
+                                {request.status === "claimed" && (
+                                    <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">
+                                        {request.claimed_at && (
+                                            <p>{formatDate(request.claimed_at)}</p>
+                                        )}
                                         {request.claimed_by_name && (
-                                            <p className="mt-1 break-words text-xs text-slate-500">
+                                            <p className="mt-1 break-words text-slate-500 dark:text-slate-400">
                                                 Claimed by {request.claimed_by_name}
                                             </p>
                                         )}
                                     </div>
-                                ) : request.ready_at ? (
-                                    formatDate(request.ready_at)
-                                ) : (
-                                    "Not scheduled"
                                 )}
                             </td>
                             <td className="break-words px-2 py-3 sm:px-3 lg:px-4 lg:py-4">
                                 <p className="font-medium uppercase">{request.payment_method}</p>
-                                <p className="mt-1 text-xs capitalize text-slate-500">
+                                <p className="mt-1 text-xs capitalize text-slate-500 dark:text-slate-400">
                                     {request.payment_status}
                                 </p>
-                                {request.payment_reference && (
-                                    <p className="mt-1 break-words text-xs text-slate-500">
-                                        Ref: {request.payment_reference}
-                                    </p>
+                                {request.payment_receipt_url && (
+                                    <PaymentReceiptPreviewDialog
+                                        url={request.payment_receipt_url}
+                                        requestId={request.id}
+                                    />
                                 )}
                             </td>
                             {canProcess && (
@@ -228,6 +276,7 @@ export default function DocumentRequestTable({
                     ))}
                 </tbody>
             </table>
+            )}
         </div>
     );
 }
@@ -268,17 +317,57 @@ function IdentityPreviewDialog({
     );
 }
 
+function PaymentReceiptPreviewDialog({
+    url,
+    requestId,
+}: {
+    url: string;
+    requestId: number;
+}) {
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <button
+                    type="button"
+                    className="mt-2 block break-words text-left text-xs font-semibold text-emerald-700 underline"
+                >
+                    View GCash receipt
+                </button>
+            </DialogTrigger>
+            <DialogContent className="w-[calc(100%-2rem)] max-w-5xl">
+                <DialogHeader>
+                    <DialogTitle>GCash receipt - Request #{requestId}</DialogTitle>
+                    <DialogDescription>
+                        Review the uploaded receipt before verifying payment.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex h-[70vh] w-full items-center justify-center overflow-auto rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-950">
+                    <img
+                        src={url}
+                        alt={`GCash receipt for request ${requestId}`}
+                        className="max-h-full max-w-full object-contain"
+                    />
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function RequestActions({ request }: { request: DocumentRequestRow }) {
-    const isFinalized = request.status === "claimed" || request.status === "rejected";
-    const lockMessage =
-        request.status === "claimed"
-            ? "Claim recorded. Processing details are locked."
-            : "Request rejected. Processing details are locked.";
-    const form = useForm({
-        status: request.status,
-        ready_at: request.ready_at_input ?? "",
+    const isIdentityRejected = request.identity_status === "rejected";
+    const isFinalized =
+        request.status === "claimed" || request.status === "rejected" || isIdentityRejected;
+    const [readySubmitted, setReadySubmitted] = useState(false);
+    const identityForm = useForm({
+        identity_status: request.identity_status,
+    });
+    const readyForm = useForm({
+        status: "ready",
         payment_status: request.payment_status,
         identity_status: request.identity_status,
+    });
+    const paymentForm = useForm({
+        payment_status: "paid" as const,
     });
     const claimForm = useForm({
         status: "",
@@ -286,10 +375,18 @@ function RequestActions({ request }: { request: DocumentRequestRow }) {
         identity_status: "",
     });
 
-    const submit = (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        form.patch(`/secretary/requests/${request.id}`, {
+    const markReady = () => {
+        setReadySubmitted(true);
+        readyForm.transform(() => ({
+            status: "ready",
+            payment_status: request.payment_status,
+            identity_status: identityForm.data.identity_status,
+        }));
+        readyForm.patch(`/secretary/requests/${request.id}`, {
             preserveScroll: true,
+            onError: () => setReadySubmitted(false),
+            onHttpException: () => setReadySubmitted(false),
+            onNetworkError: () => setReadySubmitted(false),
         });
     };
 
@@ -299,37 +396,45 @@ function RequestActions({ request }: { request: DocumentRequestRow }) {
         });
     };
 
-    const nextStatuses: Record<string, string[]> = {
-        pending: ["pending", "processing", "rejected"],
-        processing: ["processing", "ready", "rejected"],
-        ready: ["ready"],
-        claimed: ["claimed"],
-        rejected: ["rejected"],
+    const markPaid = () => {
+        paymentForm.patch(`/secretary/requests/${request.id}/payment`, {
+            preserveScroll: true,
+        });
     };
 
     return (
         <div className="space-y-2">
-            <form onSubmit={submit} className="grid min-w-0 grid-cols-2 gap-2">
+            <div className="grid min-w-0 grid-cols-2 gap-2">
                 <label className="block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300">
                     ID verification
                     <select
                         value={
-                            form.data.identity_status === "pending" &&
+                            identityForm.data.identity_status === "pending" &&
                             !request.identity_status_locked
                                 ? ""
-                                : form.data.identity_status
+                                : identityForm.data.identity_status
                         }
                         disabled={isFinalized || request.identity_status_locked}
-                        onChange={(event) =>
-                            form.setData(
-                                "identity_status",
-                                event.target.value as "pending" | "verified" | "rejected",
-                            )
-                        }
+                        onChange={(event) => {
+                            const identityStatus = event.target.value as
+                                | "pending"
+                                | "verified"
+                                | "rejected";
+                            identityForm.transform(() => ({
+                                status: request.status,
+                                payment_status: request.payment_status,
+                                identity_status: identityStatus,
+                            }));
+                            identityForm.patch(`/secretary/requests/${request.id}`, {
+                                preserveScroll: true,
+                                onSuccess: () =>
+                                    identityForm.setData("identity_status", identityStatus),
+                            });
+                        }}
                         className="mt-1 min-w-0 w-full max-w-full rounded-lg border border-slate-300 bg-white px-1.5 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950"
                     >
                         {request.identity_status_locked &&
-                            form.data.identity_status === "pending" && (
+                            identityForm.data.identity_status === "pending" && (
                                 <option value="pending" disabled>
                                     Pending (locked)
                                 </option>
@@ -340,82 +445,82 @@ function RequestActions({ request }: { request: DocumentRequestRow }) {
                         <option value="verified">Verified</option>
                         <option value="rejected">Rejected</option>
                     </select>
-                    {request.identity_status_locked && (
-                        <span className="mt-1 block text-[10px] font-normal text-slate-500 sm:text-xs">
-                            Saved and locked
-                        </span>
-                    )}
                 </label>
-                {form.errors.identity_status && (
-                    <p className="col-span-2 text-xs text-red-600">{form.errors.identity_status}</p>
-                )}
-                <label className="block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300">
-                    Status
-                    <select
-                        value={form.data.status}
-                        disabled={isFinalized}
-                        onChange={(event) => form.setData("status", event.target.value)}
-                        className="mt-1 min-w-0 w-full max-w-full rounded-lg border border-slate-300 bg-white px-1.5 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950"
-                    >
-                        {(nextStatuses[request.status] ?? [request.status]).map((status) => (
-                            <option key={status} value={status}>
-                                {statusLabel(status)}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <label className="col-span-2 block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300">
-                    Claim date and time
-                    <input
-                        type="datetime-local"
-                        value={form.data.ready_at}
-                        disabled={isFinalized}
-                        onChange={(event) => form.setData("ready_at", event.target.value)}
-                        className="mt-1 min-w-0 w-full max-w-full rounded-lg border border-slate-300 bg-white px-1 py-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950"
-                    />
-                </label>
-                {form.errors.ready_at && (
-                    <p className="col-span-2 text-xs text-red-600">{form.errors.ready_at}</p>
-                )}
-                <label className="block min-w-0 text-xs font-medium text-slate-600 dark:text-slate-300">
-                    Payment status
-                    <select
-                        value={form.data.payment_status}
-                        disabled={isFinalized || request.payment_status === "paid"}
-                        onChange={(event) =>
-                            form.setData("payment_status", event.target.value as "paid" | "unpaid")
-                        }
-                        className="mt-1 min-w-0 w-full max-w-full rounded-lg border border-slate-300 bg-white px-1.5 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950"
-                    >
-                        <option value="unpaid">Unpaid</option>
-                        <option value="paid">Paid</option>
-                    </select>
-                </label>
-                {request.payment_status === "paid" && (
-                    <p className="col-span-2 text-xs text-emerald-700 dark:text-emerald-400">
-                        Payment is locked as paid and cannot be changed.
+                {identityForm.errors.identity_status && (
+                    <p className="col-span-2 text-xs text-red-600">
+                        {identityForm.errors.identity_status}
                     </p>
                 )}
-                {isFinalized && (
-                    <p className="col-span-2 text-xs font-medium text-slate-500">
-                        {lockMessage}
-                    </p>
+                {!isIdentityRejected &&
+                    (request.status === "pending" || request.status === "processing") && (
+                    <div className="col-span-2">
+                        <button
+                            type="button"
+                            onClick={markReady}
+                            disabled={
+                                readyForm.processing ||
+                                readySubmitted ||
+                                identityForm.data.identity_status !== "verified" ||
+                                (request.payment_method === "gcash" &&
+                                    request.payment_status !== "paid")
+                            }
+                            className="w-full rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {readyForm.processing || readySubmitted
+                                ? "Updating…"
+                                : "Ready to claim"}
+                        </button>
+                        {readyForm.errors.status && (
+                            <p className="mt-1 text-xs text-red-600">{readyForm.errors.status}</p>
+                        )}
+                        {readyForm.errors.identity_status && (
+                            <p className="mt-1 text-xs text-red-600">
+                                {readyForm.errors.identity_status}
+                            </p>
+                        )}
+                    </div>
                 )}
-                {form.errors.status && (
-                    <p className="col-span-2 text-xs text-red-600">{form.errors.status}</p>
+                {!isIdentityRejected && (
+                    <>
+                        <div className="col-span-2">
+                            <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                Payment status
+                            </p>
+                            <button
+                                type="button"
+                                onClick={markPaid}
+                                disabled={
+                                    isFinalized ||
+                                    identityForm.data.identity_status !== "verified" ||
+                                    (request.payment_method === "cash" &&
+                                        request.status !== "ready") ||
+                                    request.payment_status === "paid" ||
+                                    (request.payment_method === "gcash" &&
+                                        !request.payment_receipt_url) ||
+                                    paymentForm.processing
+                                }
+                                className="mt-1 w-full rounded-lg bg-emerald-600 px-2 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+                            >
+                                {paymentForm.processing
+                                    ? "Updating…"
+                                    : request.payment_status === "paid"
+                                      ? "Paid"
+                                      : request.payment_method === "gcash"
+                                        ? "Mark as Paid"
+                                        : "Mark as paid"}
+                            </button>
+                        </div>
+                        {paymentForm.errors.payment_status && (
+                            <p className="col-span-2 text-xs text-red-600">
+                                {paymentForm.errors.payment_status}
+                            </p>
+                        )}
+                    </>
                 )}
-                {form.errors.payment_status && (
-                    <p className="col-span-2 text-xs text-red-600">{form.errors.payment_status}</p>
-                )}
-                <button
-                    type="submit"
-                    disabled={form.processing || isFinalized}
-                    className="col-span-2 w-full self-end rounded-lg bg-emerald-600 px-2 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
-                >
-                    {form.processing ? "Saving…" : "Save update"}
-                </button>
-            </form>
-            {request.status === "ready" && (
+            </div>
+            {!isIdentityRejected &&
+                request.status === "ready" &&
+                request.payment_method !== "cash" && (
                 <div className="space-y-1 border-t border-slate-200 pt-2 dark:border-slate-700">
                     <button
                         type="button"
@@ -460,7 +565,7 @@ function StatusBadge({ status }: { status: string }) {
 
     return (
         <span
-            className={`rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${classes[status] ?? classes.pending}`}
+            className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-center text-xs leading-tight font-semibold ${classes[status] ?? classes.pending}`}
         >
             {statusLabel(status)}
         </span>
@@ -497,6 +602,12 @@ export function formatDate(value: string): string {
     return new Intl.DateTimeFormat(undefined, {
         dateStyle: "medium",
         timeStyle: "short",
+    }).format(new Date(value));
+}
+
+function formatBirthdate(value: string): string {
+    return new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
     }).format(new Date(value));
 }
 

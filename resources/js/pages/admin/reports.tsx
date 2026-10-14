@@ -34,7 +34,7 @@ type Props = {
 export default function ReportsPage({ summary, activities }: Props) {
     return (
         <>
-            <Head title="Activity Reports" />
+            <Head title="Activity" />
             <ActivityReport
                 roleLabel="Super Admin"
                 backHref="/admin/dashboard"

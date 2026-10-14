@@ -29,15 +29,12 @@ class DocumentReadyNotification extends Notification
     {
         $documentName = $this->documentRequest->documentType->name;
         $readyAt = $this->documentRequest->ready_at;
-        $claimTime = $readyAt?->timezone(config('app.timezone'))
-            ->format('F j, Y \a\t g:i A');
 
         return [
             'title' => 'Your Document is ready to claim at BRGY HALL',
             'message' => sprintf(
-                'Your %s is ready to claim at BRGY HALL on %s. The document can only be released when you claim it in person.',
+                'Your %s is ready to claim at BRGY HALL. The document can only be released when you claim it in person.',
                 $documentName,
-                $claimTime,
             ),
             'document_request_id' => (string) $this->documentRequest->id,
             'ready_at' => $readyAt?->toIso8601String() ?? '',

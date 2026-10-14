@@ -70,6 +70,9 @@ class FortifyServiceProvider extends ServiceProvider
                 'canResetPassword' => Features::enabled(
                     Features::resetPasswords()
                 ),
+                'csrfToken' => $request->session()->token(),
+                'passwordRules' => Password::defaults()
+                    ->toPasswordRulesString(),
                 'status' => $request->session()->get('status'),
             ])
         );

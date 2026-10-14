@@ -26,11 +26,11 @@ export default function ResidentDashboard({ user, statistics, documentTypes, req
             <div className="space-y-8">
                 <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                     <div>
-                        <p className="text-sm font-semibold text-emerald-600">Resident Portal</p>
-                        <h1 className="mt-1 text-3xl font-black text-slate-900">
+                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Resident Portal</p>
+                        <h1 className="mt-1 text-3xl font-black text-slate-900 dark:text-slate-100">
                             Welcome back, {user.name}!
                         </h1>
-                        <p className="mt-2 text-slate-500">
+                        <p className="mt-2 text-slate-500 dark:text-slate-400">
                             Request barangay documents and track their progress.
                         </p>
                     </div>
@@ -68,7 +68,7 @@ export default function ResidentDashboard({ user, statistics, documentTypes, req
                     <div className="flex items-end justify-between gap-4">
                         <div>
                             <h2 className="text-xl font-bold">Recent requests</h2>
-                            <p className="mt-1 text-sm text-slate-500">
+                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                                 Track your document requests and payment method.
                             </p>
                         </div>
@@ -79,11 +79,11 @@ export default function ResidentDashboard({ user, statistics, documentTypes, req
                             View all
                         </Link>
                     </div>
-                    <DocumentRequestTable requests={requests} />
+                    <DocumentRequestTable requests={requests} showRequesterSearch={false} />
                     {requests.some((request) => request.status === "ready") && (
-                        <p className="rounded-xl bg-emerald-50 p-4 text-sm font-medium text-emerald-800">
-                            Your Document is ready to claim at BRGY HALL. Check the claim date and
-                            time above.
+                        <p className="rounded-xl bg-emerald-50 p-4 text-sm font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+                            Your document is ready to claim at BRGY HALL. Please visit to claim it
+                            in person.
                         </p>
                     )}
                 </section>
@@ -95,14 +95,14 @@ export default function ResidentDashboard({ user, statistics, documentTypes, req
                             <Link
                                 key={document.id}
                                 href="/resident/request"
-                                className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-emerald-300 hover:shadow-sm"
+                                className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-emerald-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900"
                             >
                                 <FileCheck2 className="h-6 w-6 text-emerald-600" />
                                 <h3 className="mt-3 font-bold">{document.name}</h3>
-                                <p className="mt-2 text-sm text-slate-500">
+                                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                                     {document.description}
                                 </p>
-                                <p className="mt-3 text-sm font-semibold text-slate-700">
+                                <p className="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
                                     Fee: {formatFee(document.fee)}
                                 </p>
                             </Link>
@@ -124,14 +124,14 @@ function StatCard({
     value: number;
 }) {
     return (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
-                <span className="rounded-xl bg-emerald-50 p-3 text-emerald-700">
+                <span className="rounded-xl bg-emerald-50 p-3 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                     <Icon className="h-5 w-5" />
                 </span>
                 <span className="text-2xl font-black">{value}</span>
             </div>
-            <p className="mt-4 text-sm font-medium text-slate-500">{label}</p>
+            <p className="mt-4 text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
         </div>
     );
 }

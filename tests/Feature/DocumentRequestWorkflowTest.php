@@ -3,10 +3,12 @@
 use App\Models\ActivityLog;
 use App\Models\DocumentRequest;
 use App\Models\DocumentType;
+use App\Models\GcashPaymentSetting;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function requestIdentityImage(string $name): UploadedFile
@@ -34,16 +36,21 @@ function requestPersonalDetails(): array
 
 test('residents can submit a document request with a payment method', function () {
     Storage::fake('local');
+    Storage::fake('public');
 
     $resident = User::factory()->create(['role' => 'resident']);
     $documentType = DocumentType::query()->firstOrFail();
+    GcashPaymentSetting::query()->create([
+        'gcash_number' => '09171234567',
+        'qr_code_path' => requestIdentityImage('gcash-qr.png')->store('gcash', 'public'),
+    ]);
 
     $response = $this->actingAs($resident)->post(route('resident.requests.store'), [
         ...requestPersonalDetails(),
         'document_type_id' => $documentType->id,
         'purpose' => 'Employment requirement',
         'payment_method' => 'gcash',
-        'payment_reference' => 'GCASH-123456',
+        'payment_receipt' => requestIdentityImage('gcash-receipt.png'),
         'id_is_valid' => true,
         'id_document_front' => requestIdentityImage('resident-id-front.png'),
         'id_document_back' => requestIdentityImage('resident-id-back.png'),
@@ -55,8 +62,7 @@ test('residents can submit a document request with a payment method', function (
         'document_type_id' => $documentType->id,
         'status' => 'pending',
         'payment_method' => 'gcash',
-        'payment_status' => 'paid',
-        'payment_reference' => 'GCASH-123456',
+        'payment_status' => 'unpaid',
         'identity_status' => 'pending',
         'contact_number' => '09171234567',
         'first_name' => 'Resident',
@@ -64,9 +70,33 @@ test('residents can submit a document request with a payment method', function (
         'surname' => 'Applicant',
         'zone' => 'Zone 2',
     ]);
+    $this->assertDatabaseHas('users', [
+        'id' => $resident->id,
+        'contact_number' => '09171234567',
+        'first_name' => 'Resident',
+        'middle_name' => 'Maria',
+        'surname' => 'Applicant',
+        'birthdate' => '1990-05-12',
+        'address' => '123 Main Street',
+        'zone' => 'Zone 2',
+        'sex' => 'Female',
+    ]);
+
+    $this->actingAs($resident)
+        ->get(route('resident.request.create'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('resident/request')
+            ->where('resident.first_name', 'Resident')
+            ->where('resident.middle_name', 'Maria')
+            ->where('resident.surname', 'Applicant')
+            ->where('resident.contact_number', '09171234567')
+            ->where('gcashPayment.configured', true)
+            ->where('gcashPayment.gcash_number', '09171234567'));
+
     $storedRequest = DocumentRequest::query()->firstOrFail();
     Storage::disk('local')->assertExists($storedRequest->id_document_front_path);
     Storage::disk('local')->assertExists($storedRequest->id_document_back_path);
+    Storage::disk('local')->assertExists($storedRequest->payment_receipt_path);
     expect(ActivityLog::query()
         ->where('event', 'request.submitted')
         ->where('actor_id', $resident->id)
@@ -83,7 +113,99 @@ test('residents can submit a document request with a payment method', function (
         ->assertDontSee('identity_document_url');
 });
 
-test('residents must provide a GCash reference number to submit a request', function () {
+test('request form personal details are empty before the resident submits a request', function () {
+    $resident = User::factory()->create([
+        'role' => 'resident',
+        'first_name' => 'Profile',
+        'middle_name' => 'Only',
+        'surname' => 'Data',
+        'birthdate' => '1990-01-01',
+        'address' => 'Profile address',
+        'zone' => 'Zone 9',
+        'sex' => 'Female',
+        'contact_number' => '09171234567',
+    ]);
+
+    $this->actingAs($resident)
+        ->get(route('resident.request.create'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('resident/request')
+            ->where('resident.first_name', null)
+            ->where('resident.middle_name', null)
+            ->where('resident.surname', null)
+            ->where('resident.birthdate', null)
+            ->where('resident.address', null)
+            ->where('resident.zone', null)
+            ->where('resident.sex', null)
+            ->where('resident.contact_number', null));
+});
+
+test('request form uses the personal details from the resident first request', function () {
+    $resident = User::factory()->create([
+        'role' => 'resident',
+        'first_name' => 'Current',
+        'middle_name' => 'Profile',
+        'surname' => 'Values',
+        'birthdate' => '2000-01-01',
+        'address' => 'Current profile address',
+        'zone' => 'Zone 5',
+        'sex' => 'Male',
+        'contact_number' => '09179999999',
+    ]);
+    $documentType = DocumentType::query()->firstOrFail();
+
+    $resident->documentRequests()->create([
+        'document_type_id' => $documentType->id,
+        'purpose' => 'First request',
+        'status' => 'pending',
+        'payment_method' => 'cash',
+        'payment_status' => 'unpaid',
+        'first_name' => 'First',
+        'middle_name' => 'Request',
+        'surname' => 'Details',
+        'birthdate' => '1990-05-12',
+        'address' => 'First request address',
+        'zone' => 'Zone 2',
+        'sex' => 'Female',
+        'contact_number' => '09171111111',
+    ]);
+    $resident->documentRequests()->create([
+        'document_type_id' => $documentType->id,
+        'purpose' => 'Second request',
+        'status' => 'pending',
+        'payment_method' => 'cash',
+        'payment_status' => 'unpaid',
+        'first_name' => 'Second',
+        'middle_name' => 'Request',
+        'surname' => 'Details',
+        'birthdate' => '2000-01-01',
+        'address' => 'Second request address',
+        'zone' => 'Zone 5',
+        'sex' => 'Male',
+        'contact_number' => '09172222222',
+    ]);
+
+    $this->actingAs($resident)
+        ->get(route('resident.request.create'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('resident/request')
+            ->where('resident.first_name', 'First')
+            ->where('resident.middle_name', 'Request')
+            ->where('resident.surname', 'Details')
+            ->where('resident.birthdate', '1990-05-12')
+            ->where('resident.address', 'First request address')
+            ->where('resident.zone', 'Zone 2')
+            ->where('resident.sex', 'Female')
+            ->where('resident.contact_number', '09171111111'));
+});
+
+test('residents must upload a GCash receipt to submit a request', function () {
+    Storage::fake('local');
+    Storage::fake('public');
+    GcashPaymentSetting::query()->create([
+        'gcash_number' => '09171234567',
+        'qr_code_path' => requestIdentityImage('gcash-qr.png')->store('gcash', 'public'),
+    ]);
     $resident = User::factory()->create(['role' => 'resident']);
     $documentType = DocumentType::query()->firstOrFail();
 
@@ -97,9 +219,147 @@ test('residents must provide a GCash reference number to submit a request', func
             'id_document_front' => requestIdentityImage('resident-id-front.png'),
             'id_document_back' => requestIdentityImage('resident-id-back.png'),
         ])
-        ->assertSessionHasErrors('payment_reference');
+        ->assertSessionHasErrors('payment_receipt');
 
     $this->assertDatabaseCount('document_requests', 0);
+});
+
+test('residents cannot select GCash until the admin configures payment details', function () {
+    $resident = User::factory()->create(['role' => 'resident']);
+    $documentType = DocumentType::query()->firstOrFail();
+
+    $this->actingAs($resident)
+        ->get(route('resident.request.create'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('resident/request')
+            ->where('gcashPayment.configured', false));
+
+    $this->actingAs($resident)
+        ->post(route('resident.requests.store'), [
+            ...requestPersonalDetails(),
+            'document_type_id' => $documentType->id,
+            'purpose' => 'Employment requirement',
+            'payment_method' => 'gcash',
+            'id_is_valid' => true,
+            'id_document_front' => requestIdentityImage('resident-id-front.png'),
+            'id_document_back' => requestIdentityImage('resident-id-back.png'),
+        ])
+        ->assertSessionHasErrors('payment_method');
+
+    $this->assertDatabaseCount('document_requests', 0);
+});
+
+test('admins can update the GCash payment number and QR code', function () {
+    Storage::fake('public');
+    $admin = User::factory()->create(['role' => 'super_admin']);
+
+    $this->actingAs($admin)
+        ->patch(route('admin.settings.gcash-payment.update'), [
+            'gcash_number' => '09171234567',
+            'qr_code' => requestIdentityImage('gcash-qr.png'),
+        ])
+        ->assertRedirect(route('admin.settings'));
+
+    $setting = GcashPaymentSetting::query()->firstOrFail();
+    expect($setting->gcash_number)->toBe('09171234567');
+    Storage::disk('public')->assertExists($setting->qr_code_path);
+
+    $this->actingAs($admin)
+        ->get(route('admin.settings'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('admin/settings')
+            ->where('gcashPayment.configured', true)
+            ->where('gcashPayment.gcash_number', '09171234567')
+            ->where('gcashPayment.qr_code_url', Storage::disk('public')->url($setting->qr_code_path)));
+});
+
+test('secretaries cannot verify a GCash payment without an uploaded receipt', function () {
+    Storage::fake('local');
+    $resident = User::factory()->create(['role' => 'resident']);
+    $secretary = User::factory()->create(['role' => 'secretary']);
+    $documentType = DocumentType::query()->firstOrFail();
+    $documentRequest = $resident->documentRequests()->create([
+        'document_type_id' => $documentType->id,
+        'purpose' => 'Employment requirement',
+        'status' => 'pending',
+        'payment_method' => 'gcash',
+        'payment_status' => 'unpaid',
+        'identity_status' => 'verified',
+        'id_document_path' => UploadedFile::fake()->createWithContent(
+            'resident-id.pdf',
+            "%PDF-1.4\nresident identity document\n%%EOF",
+        )->store('resident-ids', 'local'),
+    ]);
+
+    $this->actingAs($secretary)
+        ->patch(route('secretary.requests.payment.paid', $documentRequest))
+        ->assertSessionHasErrors('payment_status');
+
+    $this->assertDatabaseHas('document_requests', [
+        'id' => $documentRequest->id,
+        'payment_status' => 'unpaid',
+    ]);
+});
+
+test('secretaries cannot verify payment before the requester ID is verified', function () {
+    Storage::fake('local');
+    $resident = User::factory()->create(['role' => 'resident']);
+    $secretary = User::factory()->create(['role' => 'secretary']);
+    $documentType = DocumentType::query()->firstOrFail();
+    $documentRequest = $resident->documentRequests()->create([
+        'document_type_id' => $documentType->id,
+        'purpose' => 'Employment requirement',
+        'status' => 'pending',
+        'payment_method' => 'gcash',
+        'payment_status' => 'unpaid',
+        'payment_receipt_path' => requestIdentityImage('gcash-receipt.png')
+            ->store('payment-receipts', 'local'),
+        'identity_status' => 'pending',
+    ]);
+
+    $this->actingAs($secretary)
+        ->patch(route('secretary.requests.payment.paid', $documentRequest))
+        ->assertSessionHasErrors('payment_status');
+
+    $this->assertDatabaseHas('document_requests', [
+        'id' => $documentRequest->id,
+        'payment_status' => 'unpaid',
+        'identity_status' => 'pending',
+    ]);
+});
+
+test('secretaries can preview a GCash receipt but residents cannot access it', function () {
+    Storage::fake('local');
+    $resident = User::factory()->create(['role' => 'resident']);
+    $secretary = User::factory()->create(['role' => 'secretary']);
+    $documentType = DocumentType::query()->firstOrFail();
+    $receiptPath = requestIdentityImage('gcash-receipt.png')
+        ->store('payment-receipts', 'local');
+    $documentRequest = $resident->documentRequests()->create([
+        'document_type_id' => $documentType->id,
+        'purpose' => 'Employment requirement',
+        'status' => 'pending',
+        'payment_method' => 'gcash',
+        'payment_status' => 'unpaid',
+        'payment_receipt_path' => $receiptPath,
+        'identity_status' => 'pending',
+    ]);
+
+    $this->actingAs($secretary)
+        ->get(route('secretary.requests.payment-receipt', $documentRequest))
+        ->assertOk()
+        ->assertHeader('Content-Type', 'image/png')
+        ->assertHeader('Content-Disposition', "inline; filename=\"gcash-receipt-request-{$documentRequest->id}.png\"");
+
+    $this->actingAs($resident)
+        ->get(route('secretary.requests.payment-receipt', $documentRequest))
+        ->assertForbidden();
+
+    $this->actingAs($secretary)
+        ->get(route('secretary.requests'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('secretary/requests')
+            ->where('requests.0.payment_receipt_url', route('secretary.requests.payment-receipt', $documentRequest)));
 });
 
 test('only residents can submit document requests', function () {
@@ -217,9 +477,13 @@ test('secretaries can view the saved requester details and view both ID sides in
 });
 
 test('secretary processed document reports list non-pending requests only', function () {
+    Storage::fake('local');
+
     $resident = User::factory()->create(['role' => 'resident']);
     $secretary = User::factory()->create(['role' => 'secretary']);
     $documentType = DocumentType::query()->firstOrFail();
+    $receiptPath = 'payment-receipts/receipt.png';
+    Storage::disk('local')->put($receiptPath, 'receipt image');
 
     $pending = $resident->documentRequests()->create([
         'document_type_id' => $documentType->id,
@@ -239,6 +503,7 @@ test('secretary processed document reports list non-pending requests only', func
         'surname' => 'Applicant',
         'address' => '123 Main Street',
         'zone' => 'Zone 2',
+        'payment_receipt_path' => $receiptPath,
     ]);
 
     $this->actingAs($secretary)
@@ -249,7 +514,19 @@ test('secretary processed document reports list non-pending requests only', func
             ->where('summary.processing', 1)
             ->has('requests.data', 1)
             ->where('requests.data.0.id', $processed->id)
+            ->where(
+                'requests.data.0.payment_receipt_url',
+                route('secretary.requests.payment-receipt', $processed),
+            )
             ->where('requests.data.0.requester_details.contact_number', '09171234567'));
+
+    $this->actingAs($secretary)
+        ->get(route('secretary.processed-documents', ['search' => 'Resident Applicant']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('secretary/processed-documents')
+            ->where('search', 'Resident Applicant')
+            ->has('requests.data', 1)
+            ->where('requests.data.0.id', $processed->id));
 
     expect($pending->fresh()->status)->toBe('pending');
 });
@@ -287,7 +564,7 @@ test('resident dashboard shows unread count but notification content stays in it
     $now = now();
 
     DB::table('notifications')->insert([
-        'id' => (string) \Illuminate\Support\Str::uuid(),
+        'id' => (string) Str::uuid(),
         'type' => 'App\\Notifications\\DocumentReadyNotification',
         'notifiable_type' => User::class,
         'notifiable_id' => $resident->id,
@@ -320,7 +597,7 @@ test('residents can view all notifications and open one to mark it as read', fun
     $notificationIds = [];
 
     foreach (range(1, 12) as $number) {
-        $notificationIds[] = $id = (string) \Illuminate\Support\Str::uuid();
+        $notificationIds[] = $id = (string) Str::uuid();
         DB::table('notifications')->insert([
             'id' => $id,
             'type' => 'App\\Notifications\\DocumentReadyNotification',
@@ -336,7 +613,7 @@ test('residents can view all notifications and open one to mark it as read', fun
         ]);
     }
 
-    $otherNotificationId = (string) \Illuminate\Support\Str::uuid();
+    $otherNotificationId = (string) Str::uuid();
     DB::table('notifications')->insert([
         'id' => $otherNotificationId,
         'type' => 'App\\Notifications\\DocumentReadyNotification',
@@ -369,7 +646,7 @@ test('residents can view all notifications and open one to mark it as read', fun
         ->assertNotFound();
 });
 
-test('secretaries can mark requests ready and notify the resident of the claim schedule', function () {
+test('secretaries can mark requests ready and notify the resident', function () {
     Storage::fake('local');
     $resident = User::factory()->create(['role' => 'resident']);
     $secretary = User::factory()->create(['role' => 'secretary']);
@@ -379,20 +656,38 @@ test('secretaries can mark requests ready and notify the resident of the claim s
         'document_type_id' => $documentType->id,
         'purpose' => 'Employment requirement',
         'status' => 'processing',
-        'payment_method' => 'cash',
+        'payment_method' => 'gcash',
         'payment_status' => 'unpaid',
+        'payment_receipt_path' => requestIdentityImage('gcash-receipt.png')
+            ->store('payment-receipts', 'local'),
         'identity_status' => 'verified',
         'id_document_path' => UploadedFile::fake()->createWithContent(
             'resident-id.pdf',
             "%PDF-1.4\nresident identity document\n%%EOF",
         )->store('resident-ids', 'local'),
     ]);
-    $readyAt = now()->addDay()->startOfMinute();
 
     $this->actingAs($secretary)
         ->patch(route('secretary.requests.update', $documentRequest), [
             'status' => 'ready',
-            'ready_at' => $readyAt->format('Y-m-d\TH:i'),
+            'payment_status' => 'unpaid',
+            'identity_status' => 'verified',
+        ])
+        ->assertSessionHasErrors('status');
+
+    $this->assertDatabaseHas('document_requests', [
+        'id' => $documentRequest->id,
+        'status' => 'processing',
+        'payment_status' => 'unpaid',
+    ]);
+
+    $this->actingAs($secretary)
+        ->patch(route('secretary.requests.payment.paid', $documentRequest))
+        ->assertRedirect();
+
+    $this->actingAs($secretary)
+        ->patch(route('secretary.requests.update', $documentRequest), [
+            'status' => 'ready',
             'payment_status' => 'paid',
             'identity_status' => 'verified',
         ])
@@ -421,16 +716,90 @@ test('secretaries can mark requests ready and notify the resident of the claim s
     expect($databaseNotification)->not->toBeNull();
 
     $notificationData = json_decode($databaseNotification->data, true);
-
     expect($notificationData['title'])
         ->toBe('Your Document is ready to claim at BRGY HALL')
         ->and($notificationData['message'])
         ->toContain('BRGY HALL')
-        ->toContain($readyAt->format('F j, Y \a\t g:i A'))
+        ->not->toContain(' on ')
         ->toContain('claim it in person');
 });
 
+test('marking a ready cash request paid automatically records it as claimed for secretary and resident', function () {
+    Storage::fake('local');
+    $resident = User::factory()->create(['role' => 'resident']);
+    $secretary = User::factory()->create(['role' => 'secretary']);
+    $documentType = DocumentType::query()->firstOrFail();
+
+    $documentRequest = $resident->documentRequests()->create([
+        'document_type_id' => $documentType->id,
+        'purpose' => 'Employment requirement',
+        'status' => 'processing',
+        'payment_method' => 'cash',
+        'payment_status' => 'unpaid',
+        'identity_status' => 'verified',
+        'identity_status_locked' => true,
+        'first_name' => 'Maria',
+        'surname' => 'Santos',
+        'id_document_front_path' => UploadedFile::fake()
+            ->createWithContent('resident-id-front.pdf', "%PDF-1.4\nfront\n%%EOF")
+            ->store('resident-ids', 'local'),
+        'id_document_back_path' => UploadedFile::fake()
+            ->createWithContent('resident-id-back.pdf', "%PDF-1.4\nback\n%%EOF")
+            ->store('resident-ids', 'local'),
+    ]);
+
+    $this->actingAs($secretary)
+        ->patch(route('secretary.requests.update', $documentRequest), [
+            'status' => 'ready',
+            'payment_status' => 'unpaid',
+            'identity_status' => 'verified',
+        ])
+        ->assertRedirect();
+
+    $this->assertDatabaseHas('document_requests', [
+        'id' => $documentRequest->id,
+        'status' => 'ready',
+        'payment_status' => 'unpaid',
+    ]);
+
+    $this->actingAs($secretary)
+        ->patch(route('secretary.requests.payment.paid', $documentRequest))
+        ->assertRedirect();
+
+    $this->assertDatabaseHas('document_requests', [
+        'id' => $documentRequest->id,
+        'status' => 'claimed',
+        'payment_status' => 'paid',
+        'claimed_by_name' => 'Maria Santos',
+        'processed_by' => $secretary->id,
+    ]);
+    expect($documentRequest->fresh()->claimed_at)->not->toBeNull();
+
+    $this->actingAs($secretary)
+        ->get(route('secretary.requests'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('secretary/requests')
+            ->where('requests.0.status', 'claimed'));
+
+    $this->actingAs($resident)
+        ->get(route('resident.requests'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('resident/requests')
+            ->where('requests.0.status', 'claimed')
+            ->where('requests.0.claimed_by_name', 'Maria Santos')
+            ->has('requests.0.claimed_at'));
+
+    $this->actingAs($secretary)
+        ->get(route('secretary.claimed-documents', ['search' => 'Maria Santos']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('secretary/claimed-documents')
+            ->where('search', 'Maria Santos')
+            ->has('requests.data', 1)
+            ->where('requests.data.0.id', $documentRequest->id));
+});
+
 test('marking a request paid notifies the resident once', function () {
+    Storage::fake('local');
     $resident = User::factory()->create(['role' => 'resident']);
     $secretary = User::factory()->create(['role' => 'secretary']);
     $documentType = DocumentType::query()->firstOrFail();
@@ -441,15 +810,25 @@ test('marking a request paid notifies the resident once', function () {
         'status' => 'pending',
         'payment_method' => 'gcash',
         'payment_status' => 'unpaid',
-        'identity_status' => 'pending',
+        'payment_receipt_path' => requestIdentityImage('gcash-receipt.png')
+            ->store('payment-receipts', 'local'),
+        'identity_status' => 'verified',
+        'id_document_path' => UploadedFile::fake()->createWithContent(
+            'resident-id.pdf',
+            "%PDF-1.4\nresident identity document\n%%EOF",
+        )->store('resident-ids', 'local'),
     ]);
 
     $this->actingAs($secretary)
         ->patch(route('secretary.requests.update', $documentRequest), [
             'status' => 'pending',
             'payment_status' => 'paid',
-            'identity_status' => 'pending',
+            'identity_status' => 'verified',
         ])
+        ->assertSessionHasErrors('payment_status');
+
+    $this->actingAs($secretary)
+        ->patch(route('secretary.requests.payment.paid', $documentRequest))
         ->assertRedirect();
 
     $paymentNotification = DB::table('notifications')
@@ -468,11 +847,7 @@ test('marking a request paid notifies the resident once', function () {
         ->and($notificationData['document_request_id'])
         ->toBe((string) $documentRequest->id);
 
-    $this->patch(route('secretary.requests.update', $documentRequest), [
-        'status' => 'pending',
-        'payment_status' => 'paid',
-        'identity_status' => 'pending',
-    ])
+    $this->patch(route('secretary.requests.payment.paid', $documentRequest))
         ->assertRedirect();
 
     expect(DB::table('notifications')
@@ -533,6 +908,8 @@ test('requests cannot be marked claimed through the claim action until payment i
         'status' => 'ready',
         'payment_method' => 'gcash',
         'payment_status' => 'unpaid',
+        'payment_receipt_path' => requestIdentityImage('gcash-receipt.png')
+            ->store('payment-receipts', 'local'),
         'identity_status' => 'verified',
         'id_document_path' => UploadedFile::fake()->createWithContent(
             'resident-id.pdf',
@@ -707,6 +1084,79 @@ test('paid request payments cannot be changed back to unpaid', function () {
         'id' => $documentRequest->id,
         'payment_status' => 'paid',
     ]);
+});
+
+test('secretaries cannot mark payment paid after the requester ID is rejected', function () {
+    $resident = User::factory()->create(['role' => 'resident']);
+    $secretary = User::factory()->create(['role' => 'secretary']);
+    $documentType = DocumentType::query()->firstOrFail();
+
+    $documentRequest = $resident->documentRequests()->create([
+        'document_type_id' => $documentType->id,
+        'purpose' => 'Employment requirement',
+        'status' => 'pending',
+        'payment_method' => 'cash',
+        'payment_status' => 'unpaid',
+        'identity_status' => 'rejected',
+        'identity_status_locked' => true,
+    ]);
+
+    $this->actingAs($secretary)
+        ->patch(route('secretary.requests.payment.paid', $documentRequest))
+        ->assertSessionHasErrors('payment_status');
+
+    $this->assertDatabaseHas('document_requests', [
+        'id' => $documentRequest->id,
+        'payment_status' => 'unpaid',
+        'identity_status' => 'rejected',
+    ]);
+});
+
+test('rejecting a requester ID also rejects the request and notifies the resident', function () {
+    $resident = User::factory()->create(['role' => 'resident']);
+    $secretary = User::factory()->create(['role' => 'secretary']);
+    $documentType = DocumentType::query()->firstOrFail();
+
+    $documentRequest = $resident->documentRequests()->create([
+        'document_type_id' => $documentType->id,
+        'purpose' => 'Employment requirement',
+        'status' => 'pending',
+        'payment_method' => 'cash',
+        'payment_status' => 'unpaid',
+        'identity_status' => 'pending',
+    ]);
+
+    $this->actingAs($secretary)
+        ->patch(route('secretary.requests.update', $documentRequest), [
+            'status' => 'pending',
+            'payment_status' => 'unpaid',
+            'identity_status' => 'rejected',
+        ])
+        ->assertRedirect();
+
+    $this->assertDatabaseHas('document_requests', [
+        'id' => $documentRequest->id,
+        'status' => 'rejected',
+        'identity_status' => 'rejected',
+        'identity_status_locked' => true,
+    ]);
+
+    $this->assertDatabaseHas('activity_logs', [
+        'actor_id' => $secretary->id,
+        'event' => 'request.status_changed',
+        'subject_id' => (string) $documentRequest->id,
+    ]);
+
+    $this->assertDatabaseHas('notifications', [
+        'notifiable_id' => $resident->id,
+        'type' => 'App\\Notifications\\RequestRejectedNotification',
+    ]);
+
+    $this->actingAs($resident)
+        ->get(route('resident.requests'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('resident/requests')
+            ->where('requests.0.status', 'rejected'));
 });
 
 test('secretaries cannot process an unverified request or verify without an uploaded ID', function () {

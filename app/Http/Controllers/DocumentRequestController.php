@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ActivityLog;
 use App\Models\DocumentRequest as BarangayDocumentRequest;
 use App\Models\DocumentType;
+use App\Models\GcashPaymentSetting;
 use App\Models\User;
 use App\Notifications\DocumentReadyNotification;
 use App\Notifications\PaymentReceivedNotification;
@@ -14,7 +15,6 @@ use App\Support\PhilippineMobileNumber;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request as HttpRequest;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -77,26 +77,55 @@ class DocumentRequestController extends Controller
 
     public function create(HttpRequest $request): Response
     {
+        $gcashSetting = GcashPaymentSetting::query()->first();
+        $gcashQrPath = $gcashSetting?->qr_code_path;
+        $gcashQrExists = is_string($gcashQrPath)
+            && Storage::disk('public')->exists($gcashQrPath);
+        $personalDetailFields = [
+            'first_name',
+            'middle_name',
+            'surname',
+            'birthdate',
+            'address',
+            'zone',
+            'sex',
+            'contact_number',
+        ];
+        $firstRequest = BarangayDocumentRequest::query()
+            ->where('user_id', $request->user()->id)
+            ->oldest('created_at')
+            ->oldest('id')
+            ->first($personalDetailFields);
+
         return Inertia::render('resident/request', [
             'documentTypes' => DocumentType::query()
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(['id', 'name', 'description', 'fee']),
-            'resident' => $request->user()->only([
-                'first_name',
-                'middle_name',
-                'surname',
-                'birthdate',
-                'address',
-                'zone',
-                'sex',
-                'contact_number',
-            ]),
+            'resident' => $firstRequest?->only($personalDetailFields)
+                ?? array_fill_keys($personalDetailFields, null),
+            'gcashPayment' => [
+                'gcash_number' => $gcashSetting?->gcash_number,
+                'qr_code_url' => $gcashQrExists
+                    ? Storage::disk('public')->url($gcashQrPath)
+                    : null,
+                'configured' => filled($gcashSetting?->gcash_number)
+                    && $gcashQrExists,
+            ],
         ]);
     }
 
     public function store(HttpRequest $request): RedirectResponse
     {
+        if (
+            $request->input('payment_method') === 'gcash'
+            && ! $this->gcashPaymentIsConfigured()
+        ) {
+            throw ValidationException::withMessages([
+                'payment_method' => 'GCash payments are temporarily unavailable. Please choose cash.',
+            ]);
+        }
+
         $validated = $request->validate([
             'document_type_id' => [
                 'required',
@@ -105,7 +134,13 @@ class DocumentRequestController extends Controller
             ],
             'purpose' => ['required', 'string', 'max:2000'],
             'payment_method' => ['required', Rule::in(['cash', 'gcash'])],
-            'payment_reference' => ['required_if:payment_method,gcash', 'nullable', 'string', 'max:100'],
+            'payment_receipt' => [
+                'required_if:payment_method,gcash',
+                'nullable',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120',
+            ],
             ...PersonalInformation::validationRules($request->all()),
             'contact_number' => [
                 'required',
@@ -119,16 +154,25 @@ class DocumentRequestController extends Controller
 
         $frontPath = $validated['id_document_front']->store('resident-ids', 'local');
         $backPath = $validated['id_document_back']->store('resident-ids', 'local');
+        $paymentReceiptPath = isset($validated['payment_receipt'])
+            ? $validated['payment_receipt']->store('payment-receipts', 'local')
+            : null;
 
-        if (! is_string($frontPath) || ! is_string($backPath)) {
-            if (is_string($frontPath)) {
-                Storage::disk('local')->delete($frontPath);
-            }
-            if (is_string($backPath)) {
-                Storage::disk('local')->delete($backPath);
+        if (
+            ! is_string($frontPath)
+            || ! is_string($backPath)
+            || (
+                $validated['payment_method'] === 'gcash'
+                && ! is_string($paymentReceiptPath)
+            )
+        ) {
+            foreach ([$frontPath, $backPath, $paymentReceiptPath] as $path) {
+                if (is_string($path)) {
+                    Storage::disk('local')->delete($path);
+                }
             }
 
-            throw new \RuntimeException('The resident ID images could not be stored.');
+            throw new \RuntimeException('The request images could not be stored.');
         }
 
         $middleNameNotApplicable = filter_var(
@@ -136,11 +180,7 @@ class DocumentRequestController extends Controller
             FILTER_VALIDATE_BOOLEAN,
         );
 
-        $documentRequest = $request->user()->documentRequests()->create([
-            'document_type_id' => $validated['document_type_id'],
-            'purpose' => $validated['purpose'],
-            'payment_method' => $validated['payment_method'],
-            'payment_reference' => $validated['payment_reference'] ?? null,
+        $requesterDetails = [
             'contact_number' => PhilippineMobileNumber::normalize($validated['contact_number']),
             'first_name' => trim($validated['first_name']),
             'middle_name' => $middleNameNotApplicable
@@ -151,15 +191,23 @@ class DocumentRequestController extends Controller
             'address' => trim($validated['address']),
             'zone' => trim($validated['zone']),
             'sex' => $validated['sex'],
+        ];
+
+        $documentRequest = $request->user()->documentRequests()->create([
+            'document_type_id' => $validated['document_type_id'],
+            'purpose' => $validated['purpose'],
+            'payment_method' => $validated['payment_method'],
+            'payment_receipt_path' => $paymentReceiptPath,
+            ...$requesterDetails,
             'status' => 'pending',
-            'payment_status' => $validated['payment_method'] === 'gcash'
-                ? 'paid'
-                : 'unpaid',
+            'payment_status' => 'unpaid',
             'identity_status' => 'pending',
             'id_document_front_path' => $frontPath,
             'id_document_back_path' => $backPath,
             'id_document_path' => $frontPath,
         ]);
+
+        $request->user()->update($requesterDetails);
 
         ActivityLog::record(
             $request->user(),
@@ -196,12 +244,16 @@ class DocumentRequestController extends Controller
         ]);
     }
 
-    public function secretaryProcessedDocuments(): Response
+    public function secretaryProcessedDocuments(HttpRequest $request): Response
     {
+        $search = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+        ])['search'] ?? null;
+
         $processedRequests = BarangayDocumentRequest::query()
             ->where('status', '!=', 'pending');
 
-        $requests = (clone $processedRequests)
+        $requests = $this->applyRequesterSearch(clone $processedRequests, $search)
             ->with([
                 'resident:id,name,email',
                 'documentType:id,name,fee',
@@ -219,6 +271,10 @@ class DocumentRequestController extends Controller
                     : null);
             $row['identity_document_back_url'] = is_string($request->id_document_back_path)
                 ? route('secretary.requests.identity.back', $request)
+                : null;
+            $row['payment_receipt_url'] = is_string($request->payment_receipt_path)
+                && Storage::disk('local')->exists($request->payment_receipt_path)
+                ? route('secretary.requests.payment-receipt', $request)
                 : null;
             $row['requester_details'] = [
                 'first_name' => $request->first_name,
@@ -243,13 +299,20 @@ class DocumentRequestController extends Controller
                 'rejected' => (clone $processedRequests)->where('status', 'rejected')->count(),
             ],
             'requests' => $requests,
+            'search' => $search ?? '',
         ]);
     }
 
-    public function secretaryClaimedDocuments(): Response
+    public function secretaryClaimedDocuments(HttpRequest $request): Response
     {
-        $requests = BarangayDocumentRequest::query()
-            ->where('status', 'claimed')
+        $search = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+        ])['search'] ?? null;
+
+        $requests = $this->applyRequesterSearch(
+            BarangayDocumentRequest::query()->where('status', 'claimed'),
+            $search,
+        )
             ->with([
                 'resident:id,name,email',
                 'documentType:id,name,fee',
@@ -260,6 +323,7 @@ class DocumentRequestController extends Controller
 
         return Inertia::render('secretary/claimed-documents', [
             'requests' => $requests,
+            'search' => $search ?? '',
         ]);
     }
 
@@ -320,6 +384,39 @@ class DocumentRequestController extends Controller
         ]);
     }
 
+    public function showPaymentReceipt(
+        HttpRequest $request,
+        BarangayDocumentRequest $documentRequest,
+    ): StreamedResponse {
+        $path = $documentRequest->payment_receipt_path;
+        abort_unless(
+            is_string($path) && Storage::disk('local')->exists($path),
+            404,
+        );
+
+        $stream = Storage::disk('local')->readStream($path);
+        if (! is_resource($stream)) {
+            throw new \RuntimeException('The GCash payment receipt could not be opened.');
+        }
+
+        ActivityLog::record(
+            $request->user(),
+            'payment.receipt_viewed',
+            "Viewed the GCash payment receipt for request #{$documentRequest->id}.",
+            $documentRequest,
+        );
+
+        return response()->stream(function () use ($stream): void {
+            fpassthru($stream);
+            fclose($stream);
+        }, 200, [
+            'Content-Type' => Storage::disk('local')->mimeType($path) ?? 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="gcash-receipt-request-'.$documentRequest->id.'.'.pathinfo($path, PATHINFO_EXTENSION).'"',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store',
+        ]);
+    }
+
     public function adminRequests(): Response
     {
         return Inertia::render('admin/requests', [
@@ -352,12 +449,6 @@ class DocumentRequestController extends Controller
     {
         $validated = $request->validate([
             'status' => ['required', Rule::in(['pending', 'processing', 'ready', 'rejected', 'claimed'])],
-            'ready_at' => [
-                Rule::requiredIf($request->input('status') === 'ready'),
-                'nullable',
-                'date',
-                'after_or_equal:now',
-            ],
             'payment_status' => ['required', Rule::in(['unpaid', 'paid'])],
             'identity_status' => ['required', Rule::in(['pending', 'verified', 'rejected'])],
         ]);
@@ -380,6 +471,16 @@ class DocumentRequestController extends Controller
             }
 
             if (
+                $record->payment_method === 'gcash'
+                && $record->payment_status !== 'paid'
+                && $validated['payment_status'] === 'paid'
+            ) {
+                throw ValidationException::withMessages([
+                    'payment_status' => 'Verify the GCash reference using the payment verification action.',
+                ]);
+            }
+
+            if (
                 $record->identity_status_locked
                 && $validated['identity_status'] !== $record->identity_status
             ) {
@@ -388,17 +489,31 @@ class DocumentRequestController extends Controller
                 ]);
             }
 
+            $updatedStatus = $validated['identity_status'] === 'rejected'
+                ? 'rejected'
+                : $validated['status'];
+
             $allowedTransitions = [
-                'pending' => ['pending', 'processing', 'rejected'],
+                'pending' => ['pending', 'processing', 'ready', 'rejected'],
                 'processing' => ['processing', 'ready', 'rejected'],
-                'ready' => ['ready'],
+                'ready' => ['ready', 'rejected'],
                 'claimed' => ['claimed'],
                 'rejected' => ['rejected'],
             ];
 
-            if (! in_array($validated['status'], $allowedTransitions[$record->status] ?? [], true)) {
+            if (! in_array($updatedStatus, $allowedTransitions[$record->status] ?? [], true)) {
                 throw ValidationException::withMessages([
                     'status' => 'This request cannot move from its current status to the selected status.',
+                ]);
+            }
+
+            if (
+                $updatedStatus === 'ready'
+                && $record->payment_method === 'gcash'
+                && $record->payment_status !== 'paid'
+            ) {
+                throw ValidationException::withMessages([
+                    'status' => 'GCash payment must be verified before this request can be marked ready.',
                 ]);
             }
 
@@ -429,15 +544,23 @@ class DocumentRequestController extends Controller
             $previousReadyAt = $record->ready_at?->format('Y-m-d H:i:s');
 
             $record->update([
-                'status' => $validated['status'],
-                'ready_at' => $validated['status'] === 'ready'
-                    ? Carbon::parse($validated['ready_at'], config('app.timezone'))
+                'status' => $updatedStatus,
+                'ready_at' => $updatedStatus === 'ready' && $record->status !== 'ready'
+                    ? now()
                     : $record->ready_at,
                 'payment_status' => $validated['payment_status'],
                 'identity_status' => $validated['identity_status'],
                 'identity_status_locked' => true,
                 'processed_by' => $request->user()->id,
             ]);
+
+            if (
+                $record->status === 'ready'
+                && $record->payment_method === 'cash'
+                && $record->payment_status === 'paid'
+            ) {
+                $this->recordClaim($request, $record);
+            }
 
             $readyAtChanged = $previousReadyAt !== $record->ready_at?->format('Y-m-d H:i:s');
 
@@ -520,6 +643,83 @@ class DocumentRequestController extends Controller
         return back()->with('success', 'The document request has been updated.');
     }
 
+    public function markPaymentPaid(
+        HttpRequest $request,
+        BarangayDocumentRequest $documentRequest,
+    ): RedirectResponse {
+        DB::transaction(function () use ($request, $documentRequest): void {
+            $record = BarangayDocumentRequest::query()
+                ->lockForUpdate()
+                ->findOrFail($documentRequest->id);
+
+            if (in_array($record->status, ['claimed', 'rejected'], true)) {
+                throw ValidationException::withMessages([
+                    'payment_status' => 'This request is finalized and its payment details are locked.',
+                ]);
+            }
+
+            if ($record->identity_status === 'rejected') {
+                throw ValidationException::withMessages([
+                    'payment_status' => 'Payment cannot be recorded because the requester ID was rejected.',
+                ]);
+            }
+
+            if ($record->identity_status !== 'verified') {
+                throw ValidationException::withMessages([
+                    'payment_status' => 'Verify the requester’s identity before recording payment.',
+                ]);
+            }
+
+            if (
+                $record->payment_method === 'gcash'
+                && (
+                    ! is_string($record->payment_receipt_path)
+                    || ! Storage::disk('local')->exists($record->payment_receipt_path)
+                )
+            ) {
+                throw ValidationException::withMessages([
+                    'payment_status' => 'A GCash receipt image is required before payment can be verified.',
+                ]);
+            }
+
+            if ($record->payment_status === 'paid') {
+                return;
+            }
+
+            if ($record->status === 'ready' && $record->identity_status !== 'verified') {
+                throw ValidationException::withMessages([
+                    'identity_status' => 'Verify the requester’s identity before recording payment for a ready document.',
+                ]);
+            }
+
+            $record->update([
+                'payment_status' => 'paid',
+                'processed_by' => $request->user()->id,
+            ]);
+
+            ActivityLog::record(
+                $request->user(),
+                'payment.status_changed',
+                "Marked payment for request #{$record->id} as paid.",
+                $record,
+                [
+                    'payment_method' => $record->payment_method,
+                    'from' => 'unpaid',
+                    'to' => 'paid',
+                ],
+            );
+
+            $record->load('documentType');
+            $record->resident->notify(new PaymentReceivedNotification($record));
+
+            if ($record->status === 'ready' && $record->payment_method === 'cash') {
+                $this->recordClaim($request, $record);
+            }
+        });
+
+        return back()->with('success', 'Payment has been marked as paid.');
+    }
+
     public function claim(HttpRequest $request, BarangayDocumentRequest $documentRequest): RedirectResponse
     {
         DB::transaction(function () use ($request, $documentRequest): void {
@@ -545,38 +745,43 @@ class DocumentRequestController extends Controller
                 ]);
             }
 
-            $claimantName = collect([
-                $record->first_name,
-                $record->middle_name,
-                $record->surname,
-            ])->filter(fn (?string $name): bool => is_string($name) && trim($name) !== '')
-                ->map(fn (string $name): string => trim($name))
-                ->implode(' ');
-
-            if ($claimantName === '') {
-                $claimantName = $record->resident->name;
-            }
-
-            $record->update([
-                'status' => 'claimed',
-                'claimed_at' => now(),
-                'claimed_by_name' => $claimantName,
-                'processed_by' => $request->user()->id,
-            ]);
-
-            ActivityLog::record(
-                $request->user(),
-                'request.claimed',
-                "Recorded {$claimantName} as claiming request #{$record->id}.",
-                $record,
-                [
-                    'claimed_by_name' => $claimantName,
-                    'claimed_at' => $record->claimed_at?->toIso8601String(),
-                ],
-            );
+            $this->recordClaim($request, $record);
         });
 
         return back()->with('success', 'The document claim has been recorded.');
+    }
+
+    private function recordClaim(HttpRequest $request, BarangayDocumentRequest $record): void
+    {
+        $claimantName = collect([
+            $record->first_name,
+            $record->middle_name,
+            $record->surname,
+        ])->filter(fn (?string $name): bool => is_string($name) && trim($name) !== '')
+            ->map(fn (string $name): string => trim($name))
+            ->implode(' ');
+
+        if ($claimantName === '') {
+            $claimantName = $record->resident->name;
+        }
+
+        $record->update([
+            'status' => 'claimed',
+            'claimed_at' => now(),
+            'claimed_by_name' => $claimantName,
+            'processed_by' => $request->user()->id,
+        ]);
+
+        ActivityLog::record(
+            $request->user(),
+            'request.claimed',
+            "Recorded {$claimantName} as claiming request #{$record->id}.",
+            $record,
+            [
+                'claimed_by_name' => $claimantName,
+                'claimed_at' => $record->claimed_at?->toIso8601String(),
+            ],
+        );
     }
 
     /**
@@ -638,6 +843,15 @@ class DocumentRequestController extends Controller
             && Storage::disk('local')->exists($request->id_document_path);
     }
 
+    private function gcashPaymentIsConfigured(): bool
+    {
+        $setting = GcashPaymentSetting::query()->first();
+
+        return filled($setting?->gcash_number)
+            && is_string($setting?->qr_code_path)
+            && Storage::disk('public')->exists($setting->qr_code_path);
+    }
+
     private function identityImagePath(BarangayDocumentRequest $documentRequest, string $side): string
     {
         abort_unless(in_array($side, ['front', 'back'], true), 404);
@@ -668,9 +882,6 @@ class DocumentRequestController extends Controller
             ->get()
             ->map(function (BarangayDocumentRequest $request) use ($includeIdentityUrl): array {
                 $row = $request->toArray();
-                $row['ready_at_input'] = $request->ready_at
-                    ?->timezone(config('app.timezone'))
-                    ->format('Y-m-d\TH:i');
                 $row['identity_document_url'] = $includeIdentityUrl
                     && (
                         is_string($request->id_document_front_path)
@@ -681,6 +892,11 @@ class DocumentRequestController extends Controller
                 $row['identity_document_back_url'] = $includeIdentityUrl
                     && is_string($request->id_document_back_path)
                     ? route('secretary.requests.identity.back', $request)
+                    : null;
+                $row['payment_receipt_url'] = $includeIdentityUrl
+                    && is_string($request->payment_receipt_path)
+                    && Storage::disk('local')->exists($request->payment_receipt_path)
+                    ? route('secretary.requests.payment-receipt', $request)
                     : null;
                 if ($includeIdentityUrl) {
                     $row['requester_details'] = [
@@ -698,5 +914,27 @@ class DocumentRequestController extends Controller
                 return $row;
             })
             ->all();
+    }
+
+    /**
+     * @param  Builder<BarangayDocumentRequest>  $query
+     * @return Builder<BarangayDocumentRequest>
+     */
+    private function applyRequesterSearch(Builder $query, ?string $search): Builder
+    {
+        $terms = preg_split('/\s+/', trim((string) $search), -1, PREG_SPLIT_NO_EMPTY);
+
+        foreach ($terms ?: [] as $term) {
+            $query->where(function (Builder $query) use ($term): void {
+                foreach (['first_name', 'middle_name', 'surname', 'claimed_by_name'] as $column) {
+                    $query->orWhere($column, 'like', '%'.$term.'%');
+                }
+
+                $query->orWhereHas('resident', fn (Builder $residentQuery) => $residentQuery
+                    ->where('name', 'like', '%'.$term.'%'));
+            });
+        }
+
+        return $query;
     }
 }

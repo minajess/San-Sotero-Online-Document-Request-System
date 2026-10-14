@@ -27,7 +27,7 @@ export default function AdminRequestsPage({
                         schedules, and payment records.
                     </p>
                 </div>
-                <DocumentRequestTable requests={requests} />
+                <DocumentRequestTable requests={requests} showRequesterSearch={false} />
             </div>
         </>
     );

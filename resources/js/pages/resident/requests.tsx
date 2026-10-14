@@ -23,8 +23,8 @@ export default function ResidentRequestsPage({
                             Dashboard
                         </Link>
                         <h1 className="text-3xl font-black">My requests</h1>
-                        <p className="mt-2 text-slate-500">
-                            Current status, claim schedule, and payment details.
+                        <p className="mt-2 text-slate-500 dark:text-slate-400">
+                            Current status, readiness, and payment details.
                         </p>
                     </div>
                     <Link
@@ -35,7 +35,7 @@ export default function ResidentRequestsPage({
                         New request
                     </Link>
                 </div>
-                <DocumentRequestTable requests={requests} />
+                <DocumentRequestTable requests={requests} showRequesterSearch={false} />
             </div>
         </>
     );

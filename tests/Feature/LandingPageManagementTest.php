@@ -3,6 +3,8 @@
 use App\Models\LandingPageSetting;
 use App\Models\User;
 use App\Support\LandingPageContent;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('public visitors see default landing page content', function () {
@@ -14,20 +16,45 @@ test('public visitors see default landing page content', function () {
             ->where('landingPage.sections.hero.title', 'Your Barangay Documents,'));
 });
 
-test('super admins can update landing page content and section order', function () {
+test('super admins can update only the landing page logo and welcome message', function () {
+    Storage::fake('public');
+
     $admin = User::factory()->create(['role' => 'super_admin']);
     $content = LandingPageContent::defaults();
     $content['site_name'] = 'Barangay Demo';
     $content['sections']['services']['items'] = [
-        ['title' => 'New Service', 'description' => 'A newly added service.'],
+        ['title' => 'Existing Service', 'description' => 'Keep this service unchanged.'],
     ];
     $content['section_order'] = ['services', 'hero', 'process', 'about', 'cta'];
+    $setting = new LandingPageSetting;
+    $setting->id = 1;
+    $setting->content = $content;
+    $setting->save();
+    $logo = UploadedFile::fake()->createWithContent(
+        'logo.png',
+        base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aXcAAAAASUVORK5CYII='),
+    );
 
     $this->actingAs($admin)
-        ->put(route('admin.landing-page.update'), ['content' => $content])
+        ->put(route('admin.landing-page.update'), [
+            'welcome_message' => 'Welcome to the updated barangay website.',
+            'logo_image' => $logo,
+            'content' => [
+                'site_name' => 'Attempted unauthorized edit',
+                'section_order' => ['cta', 'about', 'process', 'hero', 'services'],
+            ],
+        ])
         ->assertRedirect(route('admin.landing-page.edit'));
 
-    expect(LandingPageSetting::query()->findOrFail(1)->content['site_name'])->toBe('Barangay Demo');
+    $savedContent = LandingPageSetting::query()->findOrFail(1)->content;
+    expect($savedContent['site_name'])->toBe('Barangay Demo')
+        ->and($savedContent['section_order'])->toBe(['services', 'hero', 'process', 'about', 'cta'])
+        ->and($savedContent['sections']['services']['items'][0]['title'])->toBe('Existing Service')
+        ->and($savedContent['sections']['hero']['description'])
+        ->toBe('Welcome to the updated barangay website.')
+        ->and($savedContent['logo_image'])->toStartWith('landing-page/');
+    Storage::disk('public')->assertExists($savedContent['logo_image']);
+
     $this->assertDatabaseHas('activity_logs', [
         'actor_id' => $admin->id,
         'event' => 'landing_page.updated',
@@ -36,9 +63,8 @@ test('super admins can update landing page content and section order', function 
     $this->get(route('home'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('landingPage.site_name', 'Barangay Demo')
-            ->where('landingPage.section_order.0', 'services')
-            ->has('landingPage.sections.services.items', 1)
-            ->where('landingPage.sections.services.items.0.title', 'New Service'));
+            ->where('landingPage.sections.hero.description', 'Welcome to the updated barangay website.')
+            ->where('landingPage.sections.services.items.0.title', 'Existing Service'));
 });
 
 test('only super admins can edit landing page content', function () {
@@ -53,18 +79,10 @@ test('only super admins can edit landing page content', function () {
         ->assertForbidden();
 });
 
-test('landing page links reject unsafe destinations and section orders reject unknown sections', function () {
+test('landing page welcome message is required and limited to 1000 characters', function () {
     $admin = User::factory()->create(['role' => 'super_admin']);
-    $content = LandingPageContent::defaults();
-    $content['navigation'][0]['href'] = '//example.test';
 
     $this->actingAs($admin)
-        ->put(route('admin.landing-page.update'), ['content' => $content])
-        ->assertSessionHasErrors('content.navigation.0.href');
-
-    $content = LandingPageContent::defaults();
-    $content['section_order'][0] = 'unknown';
-    $this->actingAs($admin)
-        ->put(route('admin.landing-page.update'), ['content' => $content])
-        ->assertSessionHasErrors('content.section_order.0');
+        ->put(route('admin.landing-page.update'), ['welcome_message' => str_repeat('x', 1001)])
+        ->assertSessionHasErrors('welcome_message');
 });

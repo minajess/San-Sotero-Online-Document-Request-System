@@ -69,7 +69,7 @@ export default function ActivityReport({
                         {roleLabel}
                     </p>
                     <h1 className="mt-1 text-3xl font-black">
-                        Activity reports
+                        Activity
                     </h1>
                     <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
                         System activity and current document request statistics.
@@ -112,7 +112,7 @@ export default function ActivityReport({
                 <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
                     <div className="border-b border-slate-200 p-5 dark:border-slate-800">
                         <h2 className="font-bold">Activity history</h2>
-                        <p className="mt-1 text-sm text-slate-500">
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                             Includes request submissions, ID verification,
                             payment and status changes, and administrator
                             management actions.
@@ -141,7 +141,7 @@ export default function ActivityReport({
                                                         ' ',
                                                     )}
                                                 </span>
-                                                <p className="mt-1 text-sm text-slate-500">
+                                                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                                                     {entry.actor?.name ??
                                                         entry.actor_name ??
                                                         'System'}
@@ -163,7 +163,7 @@ export default function ActivityReport({
                                         </div>
                                         <time
                                             dateTime={entry.created_at}
-                                            className="shrink-0 text-sm text-slate-500 sm:text-right"
+                                            className="shrink-0 text-sm text-slate-500 dark:text-slate-400 sm:text-right"
                                         >
                                             {formatDate(entry.created_at)}
                                         </time>
@@ -202,7 +202,7 @@ export default function ActivityReport({
                             <p className="mt-3 font-semibold">
                                 No activities recorded yet
                             </p>
-                            <p className="mt-1 text-sm text-slate-500">
+                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                                 New system activity will appear here.
                             </p>
                         </div>
@@ -225,7 +225,7 @@ function SummaryCard({
     return (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-2">
-                <p className="text-sm text-slate-500">{title}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
                 <Icon className="h-5 w-5 shrink-0 text-emerald-600" />
             </div>
             <p className="mt-3 text-2xl font-black">{value}</p>
@@ -244,7 +244,7 @@ function PaginationLink({
 }) {
     if (disabled || !href) {
         return (
-            <span className="rounded-lg border border-slate-200 px-3 py-2 text-slate-400 dark:border-slate-700">
+            <span className="rounded-lg border border-slate-200 px-3 py-2 text-slate-400 dark:border-slate-700 dark:text-slate-500">
                 {children}
             </span>
         );

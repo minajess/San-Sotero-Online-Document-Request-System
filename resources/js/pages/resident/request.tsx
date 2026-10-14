@@ -1,6 +1,14 @@
 import { Head, Link, useForm } from "@inertiajs/react";
-import { AlertTriangle, ArrowLeft, FileText } from "lucide-react";
-import type { FormEvent } from "react";
+import { AlertTriangle, ArrowLeft, FileText, ImagePlus } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 
 type DocumentTypeOption = {
     id: number;
@@ -23,16 +31,22 @@ type ResidentDetails = {
 export default function CreateDocumentRequest({
     documentTypes,
     resident,
+    gcashPayment,
 }: {
     documentTypes: DocumentTypeOption[];
     resident: ResidentDetails;
+    gcashPayment: {
+        gcash_number: string | null;
+        qr_code_url: string | null;
+        configured: boolean;
+    };
 }) {
     const middleNameNotApplicable = !resident.middle_name;
     const form = useForm<{
         document_type_id: number | "";
         purpose: string;
         payment_method: "cash" | "gcash" | "";
-        payment_reference: string;
+        payment_receipt: File | null;
         contact_number: string;
         first_name: string;
         middle_name: string;
@@ -49,7 +63,7 @@ export default function CreateDocumentRequest({
         document_type_id: "",
         purpose: "",
         payment_method: "",
-        payment_reference: "",
+        payment_receipt: null,
         contact_number: resident.contact_number ?? "",
         first_name: resident.first_name ?? "",
         middle_name: resident.middle_name ?? "",
@@ -82,14 +96,14 @@ export default function CreateDocumentRequest({
                         Dashboard
                     </Link>
                     <h1 className="text-3xl font-black">Request a document</h1>
-                    <p className="mt-2 text-slate-500">
+                    <p className="mt-2 text-slate-500 dark:text-slate-400">
                         Complete the details below. The barangay secretary will review your request.
                     </p>
                 </div>
 
                 <form
                     onSubmit={submit}
-                    className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:p-8"
+                    className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-sm lg:p-8 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
                 >
                     <div className="grid gap-4 md:grid-cols-2">
                         <label className="block text-sm font-semibold">
@@ -103,7 +117,7 @@ export default function CreateDocumentRequest({
                                         event.target.value ? Number(event.target.value) : "",
                                     )
                                 }
-                                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal"
+                                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                             >
                                 <option value="">Choose a document</option>
                                 {documentTypes.map((document) => (
@@ -128,7 +142,7 @@ export default function CreateDocumentRequest({
                                 value={form.data.purpose}
                                 onChange={(event) => form.setData("purpose", event.target.value)}
                                 placeholder="Tell us what you need this document for."
-                                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal"
+                                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                             />
                             {form.errors.purpose && (
                                 <span className="mt-1 block text-sm text-red-600">
@@ -138,9 +152,9 @@ export default function CreateDocumentRequest({
                         </label>
                     </div>
 
-                    <fieldset className="space-y-4 rounded-xl border border-slate-200 p-4">
+                    <fieldset className="space-y-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                         <legend className="px-1 text-sm font-semibold">
-                            Requester contact and personal details
+                            Your personal details
                         </legend>
                         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                             <RequestField
@@ -164,7 +178,7 @@ export default function CreateDocumentRequest({
                                     required={!form.data.middle_name_na}
                                     disabled={form.data.middle_name_na}
                                 />
-                                <label className="mt-2 flex items-center gap-2 text-sm font-normal text-slate-600">
+                                <label className="mt-2 flex items-center gap-2 text-sm font-normal text-slate-600 dark:text-slate-300">
                                     <input
                                         type="checkbox"
                                         checked={form.data.middle_name_na}
@@ -204,7 +218,7 @@ export default function CreateDocumentRequest({
                                     required
                                     value={form.data.sex}
                                     onChange={(event) => form.setData("sex", event.target.value)}
-                                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal"
+                                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                                 >
                                     <option value="" disabled>
                                         Select sex
@@ -226,7 +240,7 @@ export default function CreateDocumentRequest({
                         </div>
                     </fieldset>
 
-                    <fieldset className="space-y-4 rounded-xl border border-slate-200 p-4">
+                    <fieldset className="space-y-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                         <legend className="px-1 text-sm font-semibold">
                             Government-issued ID images
                         </legend>
@@ -258,7 +272,7 @@ export default function CreateDocumentRequest({
                                 onChange={(file) => form.setData("id_document_back", file)}
                             />
                         </div>
-                        <label className="flex items-start gap-2 text-sm font-medium text-slate-700">
+                        <label className="flex items-start gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
                             <input
                                 required
                                 type="checkbox"
@@ -286,10 +300,14 @@ export default function CreateDocumentRequest({
                             {(["cash", "gcash"] as const).map((method) => (
                                 <label
                                     key={method}
-                                    className={`cursor-pointer rounded-xl border p-4 ${
+                                    className={`rounded-xl border p-4 ${
+                                        method === "gcash" && !gcashPayment.configured
+                                            ? "cursor-not-allowed opacity-60"
+                                            : "cursor-pointer"
+                                    } ${
                                         form.data.payment_method === method
-                                            ? "border-emerald-600 bg-emerald-50"
-                                            : "border-slate-200"
+                                            ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-950/50"
+                                            : "border-slate-200 dark:border-slate-700"
                                     }`}
                                 >
                                     <input
@@ -297,14 +315,23 @@ export default function CreateDocumentRequest({
                                         name="payment_method"
                                         value={method}
                                         checked={form.data.payment_method === method}
-                                        onChange={() => form.setData("payment_method", method)}
+                                        disabled={method === "gcash" && !gcashPayment.configured}
+                                        onChange={() => {
+                                            form.setData("payment_method", method);
+                                            if (method === "cash") {
+                                                form.setData("payment_receipt", null);
+                                            }
+                                            form.clearErrors("payment_method");
+                                        }}
                                         className="mr-2 accent-emerald-600"
                                     />
                                     <span className="font-semibold capitalize">{method}</span>
-                                    <span className="mt-1 block pl-6 text-xs text-slate-500">
+                                    <span className="mt-1 block pl-6 text-xs text-slate-500 dark:text-slate-400">
                                         {method === "cash"
                                             ? "Pay at the Barangay Hall."
-                                            : "Requests with a GCash reference are marked as paid."}
+                                            : gcashPayment.configured
+                                              ? "Send the payment to the GCash number or scan the QR code below."
+                                              : "GCash is temporarily unavailable until the payment details are configured."}
                                     </span>
                                 </label>
                             ))}
@@ -317,29 +344,32 @@ export default function CreateDocumentRequest({
                     </fieldset>
 
                     {form.data.payment_method === "gcash" && (
-                        <label className="block text-sm font-semibold">
-                            GCash reference number
-                            <input
-                                required
-                                value={form.data.payment_reference}
-                                onChange={(event) =>
-                                    form.setData("payment_reference", event.target.value)
-                                }
-                                maxLength={100}
-                                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal"
-                                placeholder="Enter your transaction reference"
-                            />
-                            {form.errors.payment_reference && (
-                                <FieldError message={form.errors.payment_reference} />
+                        <section className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+                            <div>
+                                <h2 className="font-semibold">Send your payment via GCash</h2>
+                                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                                    Scan the QR code or send your payment to this GCash number.
+                                </p>
+                                <p className="mt-2 text-lg font-bold text-emerald-800 dark:text-emerald-300">
+                                    {gcashPayment.gcash_number}
+                                </p>
+                            </div>
+                            {gcashPayment.qr_code_url && (
+                                <img
+                                    src={gcashPayment.qr_code_url}
+                                    alt="Barangay GCash payment QR code"
+                                    className="h-56 w-56 rounded-xl border border-slate-200 bg-white object-contain p-2 dark:border-slate-700"
+                                />
                             )}
-                            <span className="mt-1 block font-normal text-slate-500">
-                                This system records your preferred method and reference. It does not
-                                charge GCash automatically.
-                            </span>
-                        </label>
+                            <GcashReceiptField
+                                file={form.data.payment_receipt}
+                                error={form.errors.payment_receipt}
+                                onChange={(file) => form.setData("payment_receipt", file)}
+                            />
+                        </section>
                     )}
 
-                    <div className="flex items-start gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+                    <div className="flex items-start gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                         <FileText className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
                         <p>
                             Your request will be marked pending until the secretary reviews it.
@@ -355,7 +385,7 @@ export default function CreateDocumentRequest({
                             !form.data.id_is_valid ||
                             !form.data.payment_method ||
                             (form.data.payment_method === "gcash" &&
-                                !form.data.payment_reference.trim())
+                                !form.data.payment_receipt)
                         }
                         className="w-full rounded-xl bg-emerald-600 px-8 py-3 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:ml-auto sm:block sm:w-fit sm:min-w-56"
                     >
@@ -403,7 +433,7 @@ function RequestField({
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 {...inputProps}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal disabled:bg-slate-100"
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal text-slate-900 disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:disabled:bg-slate-800"
             />
             {error && <FieldError message={error} />}
         </label>
@@ -423,23 +453,146 @@ function IdImageField({
     error?: string;
     onChange: (file: File | null) => void;
 }) {
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!file) {
+            setPreviewUrl(null);
+            return;
+        }
+
+        const objectUrl = URL.createObjectURL(file);
+        setPreviewUrl(objectUrl);
+
+        return () => URL.revokeObjectURL(objectUrl);
+    }, [file]);
+
     return (
-        <label className="block text-sm font-semibold">
-            {label}
-            <input
-                required
-                name={name}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(event) => onChange(event.target.files?.[0] ?? null)}
-                className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal file:mr-4 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-3 file:py-2 file:font-semibold file:text-emerald-700"
-            />
-            <span className="mt-1 block font-normal text-slate-500">
+        <div className="block text-sm font-semibold">
+            <label>
+                {label}
+                <input
+                    required
+                    name={name}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(event) => onChange(event.target.files?.[0] ?? null)}
+                    className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal text-slate-900 file:mr-4 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-3 file:py-2 file:font-semibold file:text-emerald-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:file:bg-emerald-950 dark:file:text-emerald-300"
+                />
+            </label>
+            <span className="mt-1 block font-normal text-slate-500 dark:text-slate-400">
                 JPG, PNG, or WebP image, maximum 5 MB.
                 {file ? ` Selected: ${file.name}` : ""}
             </span>
+            {previewUrl && file && (
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <button
+                            type="button"
+                            className="mt-2 block text-xs font-semibold text-emerald-700 underline"
+                        >
+                            Preview selected ID
+                        </button>
+                    </DialogTrigger>
+                    <DialogContent className="w-[calc(100%-2rem)] max-w-4xl">
+                        <DialogHeader>
+                            <DialogTitle>{label} preview</DialogTitle>
+                            <DialogDescription>
+                                Check that this is the correct, readable side of your ID.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="flex max-h-[70vh] justify-center overflow-auto rounded-md bg-slate-100 p-2 dark:bg-slate-950">
+                            <img
+                                src={previewUrl}
+                                alt={`${label} uploaded for this request`}
+                                className="h-auto max-h-[65vh] max-w-full object-contain"
+                            />
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
             {error && <FieldError message={error} />}
-        </label>
+        </div>
+    );
+}
+
+function GcashReceiptField({
+    file,
+    error,
+    onChange,
+}: {
+    file: File | null;
+    error?: string;
+    onChange: (file: File | null) => void;
+}) {
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!file) {
+            setPreviewUrl(null);
+            return;
+        }
+
+        const objectUrl = URL.createObjectURL(file);
+        setPreviewUrl(objectUrl);
+
+        return () => URL.revokeObjectURL(objectUrl);
+    }, [file]);
+
+    return (
+        <div>
+            <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Upload GCash receipt
+                <input
+                    required
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(event) => onChange(event.target.files?.[0] ?? null)}
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal text-slate-900 file:mr-4 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-3 file:py-2 file:font-semibold file:text-emerald-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:file:bg-emerald-950 dark:file:text-emerald-300"
+                />
+                {error && <FieldError message={error} />}
+                <span className="mt-1 block font-normal text-slate-500 dark:text-slate-400">
+                    Upload a JPG, PNG, or WebP image up to 5 MB. The secretary will review the
+                    receipt before marking payment as paid.
+                </span>
+            </label>
+            {file && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                    <span className="flex items-center gap-2">
+                        <ImagePlus className="h-4 w-4 text-emerald-600" />
+                        {file.name}
+                    </span>
+                    {previewUrl && (
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <button
+                                    type="button"
+                                    className="font-semibold text-emerald-700 underline"
+                                >
+                                    Preview selected GCash receipt
+                                </button>
+                            </DialogTrigger>
+                            <DialogContent className="w-[calc(100%-2rem)] max-w-4xl">
+                                <DialogHeader>
+                                    <DialogTitle>GCash receipt preview</DialogTitle>
+                                    <DialogDescription>
+                                        Check that this is the correct payment receipt before
+                                        submitting your request.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="flex max-h-[70vh] justify-center overflow-auto rounded-md bg-slate-100 p-2 dark:bg-slate-950">
+                                    <img
+                                        src={previewUrl}
+                                        alt="Selected GCash payment receipt"
+                                        className="h-auto max-h-[65vh] max-w-full object-contain"
+                                    />
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }
 

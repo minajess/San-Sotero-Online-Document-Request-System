@@ -4,11 +4,12 @@ use App\Http\Controllers\ActivityReportController;
 use App\Http\Controllers\AdminManagementController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentRequestController;
+use App\Http\Controllers\GcashPaymentSettingController;
 use App\Http\Controllers\LandingPageController;
+use App\Http\Controllers\PasswordRecoveryController;
 use App\Http\Controllers\PhoneVerificationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 /*
 |--------------------------------------------------------------------------
@@ -36,6 +37,16 @@ Route::post('/phone/verify', [
 ])
     ->middleware('throttle:6,1')
     ->name('phone.verification.verify');
+
+Route::prefix('password-recovery')
+    ->name('password-recovery.')
+    ->middleware('throttle:10,1')
+    ->controller(PasswordRecoveryController::class)
+    ->group(function () {
+        Route::post('/code', 'sendCode')->name('code');
+        Route::post('/verify', 'verifyCode')->name('verify');
+        Route::post('/reset', 'resetPassword')->name('reset');
+    });
 
 /*
 |--------------------------------------------------------------------------
@@ -179,9 +190,15 @@ Route::middleware('auth')->group(function () {
             |--------------------------------------------------------------------------
             */
 
-            Route::get('/settings', function () {
-                return Inertia::render('admin/settings');
-            })->name('settings');
+            Route::get('/settings', [
+                GcashPaymentSettingController::class,
+                'edit',
+            ])->name('settings');
+
+            Route::patch('/settings/gcash-payment', [
+                GcashPaymentSettingController::class,
+                'update',
+            ])->name('settings.gcash-payment.update');
         });
 
     /*
@@ -210,6 +227,20 @@ Route::middleware('auth')->group(function () {
     ])
         ->middleware('role:secretary')
         ->name('secretary.requests.update');
+
+    Route::patch('/secretary/requests/{documentRequest}/payment', [
+        DocumentRequestController::class,
+        'markPaymentPaid',
+    ])
+        ->middleware('role:secretary')
+        ->name('secretary.requests.payment.paid');
+
+    Route::get('/secretary/requests/{documentRequest}/payment-receipt', [
+        DocumentRequestController::class,
+        'showPaymentReceipt',
+    ])
+        ->middleware('role:secretary')
+        ->name('secretary.requests.payment-receipt');
 
     Route::post('/secretary/requests/{documentRequest}/claim', [
         DocumentRequestController::class,
