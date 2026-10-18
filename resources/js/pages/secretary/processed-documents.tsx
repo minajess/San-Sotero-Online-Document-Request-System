@@ -87,7 +87,7 @@ export default function ProcessedDocumentsPage({ summary, requests, search: serv
                 </Link>
 
                 <header>
-                    <p className="text-sm font-semibold text-emerald-700">Barangay Secretary</p>
+                    <p className="text-sm font-semibold text-emerald-700"></p>
                     <h1 className="mt-1 text-3xl font-black">Processed documents reports</h1>
                     <p className="mt-2 text-slate-500 dark:text-slate-400">
                         Review document requests that have moved beyond pending, including their
@@ -316,7 +316,7 @@ function IdentityPreviewDialog({
                 </button>
             </DialogTrigger>
             <DialogContent className="w-[calc(100%-2rem)] max-w-5xl">
-                
+
                 <iframe
                     src={url}
                     title={`${sideLabel} preview for request ${requestId}`}
