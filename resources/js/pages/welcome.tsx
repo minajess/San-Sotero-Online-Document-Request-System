@@ -24,7 +24,6 @@ type LandingSection = {
 
 type LandingPageContent = {
     site_name: string;
-    logo_image: string;
     hero_image: string;
     navigation: { label: string; href: string }[];
     login_label: string;
@@ -91,7 +90,6 @@ export default function Welcome() {
             <HeroSection
                 content={landingPage.sections.hero}
                 image={landingPage.hero_image}
-                logo={landingPage.logo_image}
                 requestUrl={requestDocumentUrl}
             />
         ),
@@ -109,7 +107,7 @@ export default function Welcome() {
                     <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
                         <a href="/" className="flex items-center gap-3">
                             <img
-                                src={landingPage.logo_image}
+                                src="/brgyLogo.png"
                                 alt={landingPage.site_name}
                                 className="h-12 w-12 rounded-full border-2 border-emerald-100 object-cover"
                             />
@@ -199,12 +197,10 @@ export default function Welcome() {
 function HeroSection({
     content,
     image,
-    logo,
     requestUrl,
 }: {
     content: LandingPageContent["sections"]["hero"];
     image: string;
-    logo: string;
     requestUrl: string;
 }) {
     return (
@@ -254,10 +250,10 @@ function HeroSection({
                 </div>
                 <div className="relative">
                     <div className="absolute -top-10 -right-10 h-72 w-72 rounded-full bg-emerald-300/20 blur-3xl" />
-                    <div className="relative rounded-[2rem] border border-white/25 bg-slate-950/30 p-6 text-white shadow-2xl backdrop-blur-md">
+                    <div className="relative rounded-3xl border border-white/25 bg-slate-950/30 p-6 text-white shadow-2xl backdrop-blur-md">
                         <div className="rounded-3xl border border-white/15 bg-emerald-900/75 p-8 text-white shadow-inner backdrop-blur-sm">
                             <img
-                                src={logo}
+                                src="/brgyLogo.png"
                                 alt=""
                                 className="mx-auto h-28 w-28 rounded-full border-4 border-white/30 object-cover"
                             />

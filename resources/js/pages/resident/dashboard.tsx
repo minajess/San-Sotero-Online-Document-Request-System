@@ -26,12 +26,11 @@ export default function ResidentDashboard({ user, statistics, documentTypes, req
             <div className="space-y-8">
                 <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                     <div>
-                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Resident Portal</p>
                         <h1 className="mt-1 text-3xl font-black text-slate-900 dark:text-slate-100">
                             Welcome back, {user.name}!
                         </h1>
                         <p className="mt-2 text-slate-500 dark:text-slate-400">
-                            Request barangay documents and track their progress.
+
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-3">
@@ -52,11 +51,6 @@ export default function ResidentDashboard({ user, statistics, documentTypes, req
                         value={statistics.totalRequests}
                     />
                     <StatCard icon={Clock3} label="Pending" value={statistics.pendingRequests} />
-                    <StatCard
-                        icon={FileCheck2}
-                        label="Processing"
-                        value={statistics.processingRequests}
-                    />
                     <StatCard
                         icon={CheckCircle2}
                         label="Ready to claim"

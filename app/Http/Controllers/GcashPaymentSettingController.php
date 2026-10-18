@@ -16,16 +16,17 @@ class GcashPaymentSettingController extends Controller
     public function edit(): Response
     {
         $setting = GcashPaymentSetting::query()->first();
-        $hasQrCode = is_string($setting?->qr_code_path)
-            && Storage::disk('public')->exists($setting->qr_code_path);
+        $qrCodePath = $setting !== null ? $setting->qr_code_path : null;
+        $hasQrCode = is_string($qrCodePath)
+            && Storage::disk('public')->exists($qrCodePath);
 
         return Inertia::render('admin/settings', [
             'gcashPayment' => [
-                'gcash_number' => $setting?->gcash_number ?? '',
+                'gcash_number' => $setting !== null ? $setting->gcash_number : '',
                 'qr_code_url' => $hasQrCode
-                    ? Storage::disk('public')->url($setting->qr_code_path)
+                    ? Storage::disk('public')->url($qrCodePath)
                     : null,
-                'configured' => filled($setting?->gcash_number) && $hasQrCode,
+                'configured' => $setting !== null && filled($setting->gcash_number) && $hasQrCode,
             ],
         ]);
     }

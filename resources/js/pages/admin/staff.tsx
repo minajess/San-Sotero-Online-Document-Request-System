@@ -188,7 +188,7 @@ export default function StaffPage({ staff }: { staff: StaffMember[] }) {
                                 >
                                     {form.processing
                                         ? "Creating account…"
-                                        : "Create secretary account"}
+                                        : "Create account"}
                                 </button>
                             </div>
                         </form>

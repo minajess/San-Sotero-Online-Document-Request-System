@@ -19,8 +19,8 @@ export default function SecretaryDashboard({ statistics, requests }: Props) {
             <div className="w-full min-w-0 space-y-8">
                 <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
                     <div>
-                        <p className="text-sm font-semibold text-emerald-600">Barangay Secretary</p>
-                        <h1 className="mt-1 text-3xl font-black">Request management</h1>
+
+                        <h1 className="mt-1 text-3xl font-black py-5">Request management</h1>
                         <p className="mt-2 text-slate-500">
                             Review resident submissions, record payments, and set claim schedules.
                         </p>
@@ -30,11 +30,6 @@ export default function SecretaryDashboard({ statistics, requests }: Props) {
                 <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <Stat icon={FileText} label="Total requests" value={statistics.totalRequests} />
                     <Stat icon={Clock3} label="Pending" value={statistics.pendingRequests} />
-                    <Stat
-                        icon={CheckCircle2}
-                        label="Processing"
-                        value={statistics.processingRequests}
-                    />
                     <Stat icon={Users} label="Residents" value={statistics.totalResidents} />
                 </section>
 

@@ -301,12 +301,7 @@ function IdentityPreviewDialog({
                 </button>
             </DialogTrigger>
             <DialogContent className="w-[calc(100%-2rem)] max-w-5xl">
-                <DialogHeader>
-                    <DialogTitle>{sideLabel} - Request #{requestId}</DialogTitle>
-                    <DialogDescription>
-                        Preview of the ID submitted with this request.
-                    </DialogDescription>
-                </DialogHeader>
+
                 <iframe
                     src={url}
                     title={`${sideLabel} preview for request ${requestId}`}
@@ -335,12 +330,7 @@ function PaymentReceiptPreviewDialog({
                 </button>
             </DialogTrigger>
             <DialogContent className="w-[calc(100%-2rem)] max-w-5xl">
-                <DialogHeader>
-                    <DialogTitle>GCash receipt - Request #{requestId}</DialogTitle>
-                    <DialogDescription>
-                        Review the uploaded receipt before verifying payment.
-                    </DialogDescription>
-                </DialogHeader>
+                
                 <div className="flex h-[70vh] w-full items-center justify-center overflow-auto rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-950">
                     <img
                         src={url}

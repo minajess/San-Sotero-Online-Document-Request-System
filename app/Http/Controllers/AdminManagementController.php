@@ -72,11 +72,11 @@ class AdminManagementController extends Controller
         ]);
 
         ActivityLog::record(
-                $request->user(),
-                'staff.created',
-                "Added barangay secretary {$staff->name}.",
-                $staff,
-                ['email' => $staff->email],
+            $request->user(),
+            'staff.created',
+            "Added barangay secretary {$staff->name}.",
+            $staff,
+            ['email' => $staff->email],
         );
 
         return to_route('admin.staff')

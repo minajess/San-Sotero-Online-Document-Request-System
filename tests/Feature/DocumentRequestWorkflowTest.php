@@ -22,11 +22,11 @@ function requestIdentityImage(string $name): UploadedFile
 function requestPersonalDetails(): array
 {
     return [
-        'contact_number' => '09171234567',
-        'first_name' => 'Resident',
-        'middle_name' => 'Maria',
+        'contact_number' => '+63 (917) 123-4567',
+        'first_name' => 'Forged',
+        'middle_name' => 'Incorrect',
         'middle_name_na' => false,
-        'surname' => 'Applicant',
+        'surname' => 'Identity',
         'birthdate' => '1990-05-12',
         'address' => '123 Main Street',
         'zone' => 'Zone 2',
@@ -34,11 +34,26 @@ function requestPersonalDetails(): array
     ];
 }
 
+function requestResident(array $attributes = []): User
+{
+    return User::factory()->create(array_merge([
+        'role' => 'resident',
+        'first_name' => 'Resident',
+        'middle_name' => 'Maria',
+        'surname' => 'Applicant',
+        'birthdate' => '1990-05-12',
+        'address' => 'Registered address',
+        'zone' => 'Registered zone',
+        'sex' => 'Female',
+        'contact_number' => '09170000000',
+    ], $attributes));
+}
+
 test('residents can submit a document request with a payment method', function () {
     Storage::fake('local');
     Storage::fake('public');
 
-    $resident = User::factory()->create(['role' => 'resident']);
+    $resident = requestResident();
     $documentType = DocumentType::query()->firstOrFail();
     GcashPaymentSetting::query()->create([
         'gcash_number' => '09171234567',
@@ -46,7 +61,7 @@ test('residents can submit a document request with a payment method', function (
     ]);
 
     $response = $this->actingAs($resident)->post(route('resident.requests.store'), [
-        ...requestPersonalDetails(),
+        'contact_number' => '+63 (917) 123-4567',
         'document_type_id' => $documentType->id,
         'purpose' => 'Employment requirement',
         'payment_method' => 'gcash',
@@ -64,21 +79,24 @@ test('residents can submit a document request with a payment method', function (
         'payment_method' => 'gcash',
         'payment_status' => 'unpaid',
         'identity_status' => 'pending',
-        'contact_number' => '09171234567',
-        'first_name' => 'Resident',
-        'middle_name' => 'Maria',
-        'surname' => 'Applicant',
-        'zone' => 'Zone 2',
-    ]);
-    $this->assertDatabaseHas('users', [
-        'id' => $resident->id,
-        'contact_number' => '09171234567',
+        'contact_number' => '+63 (917) 123-4567',
         'first_name' => 'Resident',
         'middle_name' => 'Maria',
         'surname' => 'Applicant',
         'birthdate' => '1990-05-12',
-        'address' => '123 Main Street',
-        'zone' => 'Zone 2',
+        'address' => 'Registered address',
+        'zone' => 'Registered zone',
+        'sex' => 'Female',
+    ]);
+    $this->assertDatabaseHas('users', [
+        'id' => $resident->id,
+        'contact_number' => '09170000000',
+        'first_name' => 'Resident',
+        'middle_name' => 'Maria',
+        'surname' => 'Applicant',
+        'birthdate' => '1990-05-12',
+        'address' => 'Registered address',
+        'zone' => 'Registered zone',
         'sex' => 'Female',
     ]);
 
@@ -86,10 +104,9 @@ test('residents can submit a document request with a payment method', function (
         ->get(route('resident.request.create'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('resident/request')
-            ->where('resident.first_name', 'Resident')
-            ->where('resident.middle_name', 'Maria')
-            ->where('resident.surname', 'Applicant')
-            ->where('resident.contact_number', '09171234567')
+            ->where('resident.contact_number', '09170000000')
+            ->missing('resident.first_name')
+            ->missing('resident.address')
             ->where('gcashPayment.configured', true)
             ->where('gcashPayment.gcash_number', '09171234567'));
 
@@ -108,16 +125,19 @@ test('residents can submit a document request with a payment method', function (
             ->component('resident/requests')
             ->has('requests', 1)
             ->where('requests.0.document_type.name', $documentType->name)
+            ->where('requests.0.first_name', 'Resident')
+            ->where('requests.0.middle_name', 'Maria')
+            ->where('requests.0.surname', 'Applicant')
+            ->where('requests.0.zone', 'Registered zone')
             ->where('requests.0.payment_method', 'gcash'))
         ->assertDontSee('id_document_path')
         ->assertDontSee('identity_document_url');
 });
 
-test('request form personal details are empty before the resident submits a request', function () {
-    $resident = User::factory()->create([
-        'role' => 'resident',
+test('request form only receives the resident contact number', function () {
+    $resident = requestResident([
         'first_name' => 'Profile',
-        'middle_name' => 'Only',
+        'middle_name' => null,
         'surname' => 'Data',
         'birthdate' => '1990-01-01',
         'address' => 'Profile address',
@@ -130,19 +150,18 @@ test('request form personal details are empty before the resident submits a requ
         ->get(route('resident.request.create'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('resident/request')
-            ->where('resident.first_name', null)
-            ->where('resident.middle_name', null)
-            ->where('resident.surname', null)
-            ->where('resident.birthdate', null)
-            ->where('resident.address', null)
-            ->where('resident.zone', null)
-            ->where('resident.sex', null)
-            ->where('resident.contact_number', null));
+            ->where('resident.contact_number', '09171234567')
+            ->missing('resident.first_name')
+            ->missing('resident.middle_name')
+            ->missing('resident.surname')
+            ->missing('resident.birthdate')
+            ->missing('resident.address')
+            ->missing('resident.zone')
+            ->missing('resident.sex'));
 });
 
-test('request form uses the personal details from the resident first request', function () {
-    $resident = User::factory()->create([
-        'role' => 'resident',
+test('request form uses the authenticated profile rather than an old request snapshot', function () {
+    $resident = requestResident([
         'first_name' => 'Current',
         'middle_name' => 'Profile',
         'surname' => 'Values',
@@ -189,14 +208,9 @@ test('request form uses the personal details from the resident first request', f
         ->get(route('resident.request.create'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('resident/request')
-            ->where('resident.first_name', 'First')
-            ->where('resident.middle_name', 'Request')
-            ->where('resident.surname', 'Details')
-            ->where('resident.birthdate', '1990-05-12')
-            ->where('resident.address', 'First request address')
-            ->where('resident.zone', 'Zone 2')
-            ->where('resident.sex', 'Female')
-            ->where('resident.contact_number', '09171111111'));
+            ->where('resident.contact_number', '09179999999')
+            ->missing('resident.first_name')
+            ->missing('resident.address'));
 });
 
 test('residents must upload a GCash receipt to submit a request', function () {
@@ -206,7 +220,7 @@ test('residents must upload a GCash receipt to submit a request', function () {
         'gcash_number' => '09171234567',
         'qr_code_path' => requestIdentityImage('gcash-qr.png')->store('gcash', 'public'),
     ]);
-    $resident = User::factory()->create(['role' => 'resident']);
+    $resident = requestResident();
     $documentType = DocumentType::query()->firstOrFail();
 
     $this->actingAs($resident)
@@ -225,7 +239,7 @@ test('residents must upload a GCash receipt to submit a request', function () {
 });
 
 test('residents cannot select GCash until the admin configures payment details', function () {
-    $resident = User::factory()->create(['role' => 'resident']);
+    $resident = requestResident();
     $documentType = DocumentType::query()->firstOrFail();
 
     $this->actingAs($resident)
@@ -376,7 +390,7 @@ test('only residents can submit document requests', function () {
 });
 
 test('residents must upload front and back ID images when submitting a request', function () {
-    $resident = User::factory()->create(['role' => 'resident']);
+    $resident = requestResident();
     $documentType = DocumentType::query()->firstOrFail();
 
     $this->actingAs($resident)
@@ -400,8 +414,8 @@ test('residents must upload front and back ID images when submitting a request',
         ->assertSessionHasErrors('id_document_front');
 });
 
-test('requester contact and personal details are required and stored as a request snapshot', function () {
-    $resident = User::factory()->create(['role' => 'resident']);
+test('only the requester contact number is required from personal details', function () {
+    $resident = requestResident();
     $documentType = DocumentType::query()->firstOrFail();
 
     $this->actingAs($resident)
@@ -412,22 +426,34 @@ test('requester contact and personal details are required and stored as a reques
             'id_document_front' => requestIdentityImage('front.png'),
             'id_document_back' => requestIdentityImage('back.png'),
         ])
-        ->assertSessionHasErrors([
-            'contact_number',
-            'first_name',
-            'surname',
-            'birthdate',
-            'address',
-            'zone',
-            'sex',
-        ]);
+        ->assertSessionHasErrors(['contact_number']);
 
     expect(DocumentRequest::query()->count())->toBe(0);
 });
 
+test('residents cannot submit an invalid request contact number', function () {
+    $resident = requestResident();
+    $documentType = DocumentType::query()->firstOrFail();
+
+    $this->actingAs($resident)
+        ->post(route('resident.requests.store'), [
+            ...requestPersonalDetails(),
+            'contact_number' => 'not a phone',
+            'document_type_id' => $documentType->id,
+            'purpose' => 'Employment requirement',
+            'payment_method' => 'cash',
+            'id_is_valid' => true,
+            'id_document_front' => requestIdentityImage('front.png'),
+            'id_document_back' => requestIdentityImage('back.png'),
+        ])
+        ->assertSessionHasErrors('contact_number');
+
+    $this->assertDatabaseCount('document_requests', 0);
+});
+
 test('secretaries can view the saved requester details and view both ID sides inline', function () {
     Storage::fake('local');
-    $resident = User::factory()->create(['role' => 'resident']);
+    $resident = requestResident();
     $secretary = User::factory()->create(['role' => 'secretary']);
     $documentType = DocumentType::query()->firstOrFail();
 
@@ -446,9 +472,12 @@ test('secretaries can view the saved requester details and view both ID sides in
         ->get(route('secretary.requests'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('secretary/requests')
-            ->where('requests.0.requester_details.contact_number', '09171234567')
-            ->where('requests.0.requester_details.address', '123 Main Street')
-            ->where('requests.0.requester_details.zone', 'Zone 2')
+            ->where('requests.0.requester_details.contact_number', '+63 (917) 123-4567')
+            ->where('requests.0.requester_details.first_name', 'Resident')
+            ->where('requests.0.requester_details.middle_name', 'Maria')
+            ->where('requests.0.requester_details.surname', 'Applicant')
+            ->where('requests.0.requester_details.address', 'Registered address')
+            ->where('requests.0.requester_details.zone', 'Registered zone')
             ->where('requests.0.identity_document_back_url', route('secretary.requests.identity.back', $storedRequest)));
 
     $this->get(route('secretary.requests.identity', $storedRequest))
@@ -796,6 +825,74 @@ test('marking a ready cash request paid automatically records it as claimed for 
             ->where('search', 'Maria Santos')
             ->has('requests.data', 1)
             ->where('requests.data.0.id', $documentRequest->id));
+});
+
+test('secretary monthly claimed report groups records by type using claimed date', function () {
+    $secretary = User::factory()->create(['role' => 'secretary']);
+    $resident = User::factory()->create([
+        'role' => 'resident',
+        'name' => 'Maria Santos',
+        'email' => 'maria@example.test',
+    ]);
+    $clearance = DocumentType::query()->where('name', 'Barangay Clearance')->firstOrFail();
+    $residency = DocumentType::query()->where('name', 'Certificate of Residency')->firstOrFail();
+    $indigency = DocumentType::query()->where('name', 'Certificate of Indigency')->firstOrFail();
+
+    $resident->documentRequests()->create([
+        'document_type_id' => $clearance->id,
+        'purpose' => 'Selected period claim',
+        'status' => 'claimed',
+        'payment_method' => 'cash',
+        'payment_status' => 'paid',
+        'contact_number' => '09998887777',
+        'address' => 'Submitted request address',
+        'zone' => 'Zone 2',
+        'claimed_at' => '2026-05-12 10:00:00',
+        'ready_at' => '2026-04-30 10:00:00',
+    ]);
+    $resident->documentRequests()->create([
+        'document_type_id' => $clearance->id,
+        'purpose' => 'Outside period claim',
+        'status' => 'claimed',
+        'payment_method' => 'cash',
+        'payment_status' => 'paid',
+        'claimed_at' => '2026-04-30 10:00:00',
+        'ready_at' => '2026-05-01 10:00:00',
+    ]);
+    $resident->documentRequests()->create([
+        'document_type_id' => $residency->id,
+        'purpose' => 'Second selected period claim',
+        'status' => 'claimed',
+        'payment_method' => 'cash',
+        'payment_status' => 'paid',
+        'claimed_at' => '2026-05-20 14:00:00',
+    ]);
+    $resident->documentRequests()->create([
+        'document_type_id' => $indigency->id,
+        'purpose' => 'Not actually claimed',
+        'status' => 'ready',
+        'payment_method' => 'cash',
+        'payment_status' => 'paid',
+        'claimed_at' => '2026-05-21 14:00:00',
+    ]);
+
+    $this->actingAs($secretary)
+        ->get(route('secretary.claimed-documents', ['month' => '2026-05']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('secretary/claimed-documents')
+            ->where('report.month', '2026-05')
+            ->where('report.month_label', 'May 2026')
+            ->where('report.total', 2)
+            ->has('report.categories', 2)
+            ->where('report.categories.0.type', 'Barangay Clearance')
+            ->where('report.categories.0.total', 1)
+            ->where('report.categories.0.records.0.resident_name', 'Maria Santos')
+            ->where('report.categories.0.records.0.contact_number', '09998887777')
+            ->where('report.categories.0.records.0.email', 'maria@example.test')
+            ->where('report.categories.0.records.0.address', 'Zone 2, Submitted request address')
+            ->where('report.categories.0.records.0.payment', 'cash')
+            ->where('report.categories.1.type', 'Certificate of Residency')
+            ->where('report.categories.1.total', 1));
 });
 
 test('marking a request paid notifies the resident once', function () {

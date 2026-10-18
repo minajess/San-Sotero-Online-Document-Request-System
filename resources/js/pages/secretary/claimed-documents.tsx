@@ -1,5 +1,5 @@
 import { Head, Link, router } from "@inertiajs/react";
-import { ArrowLeft, ClipboardCheck, Search } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Printer, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type ClaimedRequest = {
@@ -20,14 +20,38 @@ type PaginatedRequests = {
     next_page_url: string | null;
 };
 
+type MonthlyReport = {
+    month: string;
+    month_label: string;
+    categories: {
+        type: string;
+        total: number;
+        records: {
+            resident_name: string;
+            contact_number: string | null;
+            email: string;
+            address: string | null;
+            claimed_at: string | null;
+            payment: string;
+        }[];
+    }[];
+    total: number;
+    barangay_name: string;
+    logo_image: string;
+};
+
 export default function ClaimedDocumentsPage({
     requests,
     search: serverSearch,
+    report,
 }: {
     requests: PaginatedRequests;
     search: string;
+    report: MonthlyReport;
 }) {
     const [search, setSearch] = useState(serverSearch);
+    const [month, setMonth] = useState(report.month);
+    const [isReportPreviewOpen, setIsReportPreviewOpen] = useState(false);
 
     useEffect(() => {
         if (search === serverSearch) return;
@@ -35,13 +59,15 @@ export default function ClaimedDocumentsPage({
         const timeout = window.setTimeout(() => {
             router.get(
                 "/secretary/claimed-documents",
-                { search: search || undefined },
+                { search: search || undefined, month },
                 { preserveState: true, preserveScroll: true, replace: true },
             );
         }, 300);
 
         return () => window.clearTimeout(timeout);
-    }, [search, serverSearch]);
+    }, [search, serverSearch, month]);
+
+    useEffect(() => setMonth(report.month), [report.month]);
 
     return (
         <>
@@ -56,12 +82,9 @@ export default function ClaimedDocumentsPage({
                 </Link>
 
                 <header>
-                    <p className="text-sm font-semibold text-emerald-700">Barangay Secretary</p>
+
                     <h1 className="mt-1 text-3xl font-black">Claimed document records</h1>
-                    <p className="mt-2 text-slate-500 dark:text-slate-400">
-                        Records show the requester name and date and time each paid document was
-                        claimed.
-                    </p>
+
                 </header>
 
                 <label className="block max-w-md text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -81,6 +104,149 @@ export default function ClaimedDocumentsPage({
                     </div>
                 </label>
 
+                <section className="space-y-4 border-y border-slate-200 py-5 dark:border-slate-800">
+                    <form
+                        className="no-print flex flex-wrap items-end gap-3"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            setIsReportPreviewOpen(true);
+                            router.get(
+                                "/secretary/claimed-documents",
+                                { search: search || undefined, month },
+                                { preserveState: true, preserveScroll: true, replace: true },
+                            );
+                        }}
+                    >
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                            Report month
+                            <input
+                                type="month"
+                                value={month}
+                                onChange={(event) => setMonth(event.target.value)}
+                                required
+                                className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                            />
+                        </label>
+                        <button
+                            type="submit"
+                            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+                        >
+                            Preview Report
+                        </button>
+                    </form>
+
+                    {isReportPreviewOpen && (
+                        <div
+                            className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-4 sm:p-8"
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="monthly-report-dialog-title"
+                        >
+                            <div className="mx-auto max-w-4xl rounded-lg bg-white p-5 shadow-xl sm:p-8">
+                                <div className="no-print mb-5 flex items-center justify-between gap-4">
+                                    <h2
+                                        id="monthly-report-dialog-title"
+                                        className="text-lg font-bold text-slate-900"
+                                    >
+                                        Report preview
+                                    </h2>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => window.print()}
+                                            className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+                                        >
+                                            <Printer aria-hidden="true" className="h-4 w-4" />
+                                            Print Report
+                                        </button>
+                                        <button
+                                            type="button"
+                                            aria-label="Close report preview"
+                                            onClick={() => setIsReportPreviewOpen(false)}
+                                            className="rounded-lg border border-slate-300 p-2 text-slate-700 hover:bg-slate-50"
+                                        >
+                                            <X aria-hidden="true" className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                    <article id="monthly-claimed-report" className="bg-white text-slate-900">
+                        <header className="flex items-center gap-4 border-b-2 border-emerald-800 pb-4">
+                            <img
+                                src={report.logo_image}
+                                alt=""
+                                className="h-16 w-16 object-contain"
+                            />
+                            <div>
+                                <h2 className="text-xl font-bold">{report.barangay_name}</h2>
+                                <p className="mt-1 text-sm text-slate-600">
+                                    Monthly Claimed Document Report
+                                </p>
+                                <p className="text-sm font-semibold">{report.month_label}</p>
+                            </div>
+                        </header>
+
+                        {report.categories.length > 0 ? (
+                            <div className="mt-5 space-y-6">
+                                {report.categories.map((category) => (
+                                    <section key={category.type} className="report-category">
+                                        <div className="flex items-center justify-between border-b border-slate-300 pb-2">
+                                            <h3 className="font-bold">{category.type}</h3>
+                                            <p className="text-sm font-semibold">
+                                                Subtotal: {category.total}
+                                            </p>
+                                        </div>
+                                        <table className="report-data-table mt-2 w-full table-fixed text-left text-xs">
+                                            <thead>
+                                                <tr className="text-xs uppercase text-slate-600">
+                                                    <th className="w-[34%] py-2 pr-2">Resident</th>
+                                                    <th className="w-[30%] py-2 pr-2">Address</th>
+                                                    <th className="w-[20%] py-2 pr-2">Date claimed</th>
+                                                    <th className="w-[16%] py-2">Payment</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {category.records.map((record, index) => (
+                                                    <tr
+                                                        key={`${record.resident_name}-${record.claimed_at}-${index}`}
+                                                        className="border-t border-slate-200"
+                                                    >
+                                                        <td className="py-2 pr-2">
+                                                            <span className="block font-semibold">{record.resident_name}</span>
+                                                            <span className="mt-1 block text-slate-600">
+                                                                {record.contact_number || "—"}
+                                                            </span>
+                                                            <span className="block text-slate-600">{record.email}</span>
+                                                        </td>
+                                                        <td className="py-2 pr-2">{record.address || "—"}</td>
+                                                        <td className="py-2 pr-2">
+                                                            {record.claimed_at
+                                                                ? formatDate(record.claimed_at)
+                                                                : "Not recorded"}
+                                                        </td>
+                                                        <td className="py-2 uppercase">{record.payment}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </section>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="py-8 text-center text-sm text-slate-600">
+                                No documents were claimed during this month.
+                            </p>
+                        )}
+
+                        <footer className="mt-6 border-t-2 border-emerald-800 pt-3 text-right font-bold">
+                            Overall total: {report.total}
+                        </footer>
+                    </article>
+                            </div>
+                        </div>
+                    )}
+                </section>
+
                 <section className="overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
                     {requests.data.length > 0 ? (
                         <table className="w-full min-w-[760px] text-left text-sm">
@@ -91,7 +257,7 @@ export default function ClaimedDocumentsPage({
                                         "Document",
                                         "Claimed date and time",
                                         "Payment",
-                                        "Request #",
+
                                     ].map((heading) => (
                                         <th
                                             key={heading}
@@ -124,7 +290,6 @@ export default function ClaimedDocumentsPage({
                                         <td className="px-4 py-4 uppercase">
                                             {request.payment_method}
                                         </td>
-                                        <td className="px-4 py-4">#{request.id}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -173,6 +338,37 @@ export default function ClaimedDocumentsPage({
                     )}
                 </section>
             </main>
+            <style>{`
+                @page {
+                    size: A4 portrait;
+                    margin: 16mm;
+                    @bottom-right {
+                        content: "Page " counter(page) " of " counter(pages);
+                        font-size: 9pt;
+                        color: #475569;
+                    }
+                }
+                @media print {
+                    body * { visibility: hidden !important; }
+                    #monthly-claimed-report,
+                    #monthly-claimed-report * { visibility: visible !important; }
+                    #monthly-claimed-report {
+                        position: absolute;
+                        inset: 0 auto auto 0;
+                        width: 100%;
+                        color: #0f172a !important;
+                        background: #fff !important;
+                        font-size: 10pt;
+                        print-color-adjust: exact;
+                    }
+                    .no-print { display: none !important; }
+                    .report-category { break-inside: avoid; page-break-inside: avoid; }
+                    #monthly-claimed-report table { break-inside: auto; }
+                    #monthly-claimed-report tr { break-inside: avoid; page-break-inside: avoid; }
+                    #monthly-claimed-report th,
+                    #monthly-claimed-report td { overflow-wrap: anywhere; vertical-align: top; }
+                }
+            `}</style>
         </>
     );
 }

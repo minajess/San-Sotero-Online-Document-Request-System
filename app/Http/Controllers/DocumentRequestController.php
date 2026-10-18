@@ -10,11 +10,11 @@ use App\Models\User;
 use App\Notifications\DocumentReadyNotification;
 use App\Notifications\PaymentReceivedNotification;
 use App\Notifications\RequestRejectedNotification;
-use App\Support\PersonalInformation;
-use App\Support\PhilippineMobileNumber;
+use App\Support\LandingPageContent;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request as HttpRequest;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -81,29 +81,16 @@ class DocumentRequestController extends Controller
         $gcashQrPath = $gcashSetting?->qr_code_path;
         $gcashQrExists = is_string($gcashQrPath)
             && Storage::disk('public')->exists($gcashQrPath);
-        $personalDetailFields = [
-            'first_name',
-            'middle_name',
-            'surname',
-            'birthdate',
-            'address',
-            'zone',
-            'sex',
-            'contact_number',
-        ];
-        $firstRequest = BarangayDocumentRequest::query()
-            ->where('user_id', $request->user()->id)
-            ->oldest('created_at')
-            ->oldest('id')
-            ->first($personalDetailFields);
+        $resident = $request->user();
 
         return Inertia::render('resident/request', [
             'documentTypes' => DocumentType::query()
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(['id', 'name', 'description', 'fee']),
-            'resident' => $firstRequest?->only($personalDetailFields)
-                ?? array_fill_keys($personalDetailFields, null),
+            'resident' => [
+                'contact_number' => $resident->contact_number,
+            ],
             'gcashPayment' => [
                 'gcash_number' => $gcashSetting?->gcash_number,
                 'qr_code_url' => $gcashQrExists
@@ -117,6 +104,8 @@ class DocumentRequestController extends Controller
 
     public function store(HttpRequest $request): RedirectResponse
     {
+        $resident = $request->user();
+
         if (
             $request->input('payment_method') === 'gcash'
             && ! $this->gcashPaymentIsConfigured()
@@ -125,6 +114,10 @@ class DocumentRequestController extends Controller
                 'payment_method' => 'GCash payments are temporarily unavailable. Please choose cash.',
             ]);
         }
+
+        $request->merge([
+            'contact_number' => trim((string) $request->input('contact_number')),
+        ]);
 
         $validated = $request->validate([
             'document_type_id' => [
@@ -141,15 +134,17 @@ class DocumentRequestController extends Controller
                 'mimes:jpg,jpeg,png,webp',
                 'max:5120',
             ],
-            ...PersonalInformation::validationRules($request->all()),
             'contact_number' => [
                 'required',
                 'string',
-                PhilippineMobileNumber::RULE,
+                'max:20',
+                'regex:/^(?=(?:\D*\d){7,15}\D*$)\+?[0-9][0-9\s().-]{0,19}$/',
             ],
             'id_document_front' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'id_document_back' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'id_is_valid' => ['required', 'accepted'],
+        ], [
+            'contact_number.regex' => 'Enter a valid phone number with 7–15 digits, such as 09171234567 or +63 917 123 4567.',
         ]);
 
         $frontPath = $validated['id_document_front']->store('resident-ids', 'local');
@@ -175,22 +170,15 @@ class DocumentRequestController extends Controller
             throw new \RuntimeException('The request images could not be stored.');
         }
 
-        $middleNameNotApplicable = filter_var(
-            $validated['middle_name_na'],
-            FILTER_VALIDATE_BOOLEAN,
-        );
-
         $requesterDetails = [
-            'contact_number' => PhilippineMobileNumber::normalize($validated['contact_number']),
-            'first_name' => trim($validated['first_name']),
-            'middle_name' => $middleNameNotApplicable
-                ? null
-                : trim($validated['middle_name']),
-            'surname' => trim($validated['surname']),
-            'birthdate' => $validated['birthdate'],
-            'address' => trim($validated['address']),
-            'zone' => trim($validated['zone']),
-            'sex' => $validated['sex'],
+            'contact_number' => $validated['contact_number'],
+            'first_name' => $resident->first_name,
+            'middle_name' => $resident->middle_name,
+            'surname' => $resident->surname,
+            'birthdate' => $resident->birthdate,
+            'address' => $resident->address,
+            'zone' => $resident->zone,
+            'sex' => $resident->sex,
         ];
 
         $documentRequest = $request->user()->documentRequests()->create([
@@ -206,8 +194,6 @@ class DocumentRequestController extends Controller
             'id_document_back_path' => $backPath,
             'id_document_path' => $frontPath,
         ]);
-
-        $request->user()->update($requesterDetails);
 
         ActivityLog::record(
             $request->user(),
@@ -305,9 +291,14 @@ class DocumentRequestController extends Controller
 
     public function secretaryClaimedDocuments(HttpRequest $request): Response
     {
-        $search = $request->validate([
+        $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
-        ])['search'] ?? null;
+            'month' => ['nullable', 'date_format:Y-m'],
+        ]);
+        $search = $filters['search'] ?? null;
+        $month = $filters['month'] ?? now()->format('Y-m');
+        $periodStart = Carbon::parse($month.'-01')->startOfMonth();
+        $periodEnd = $periodStart->copy()->endOfMonth();
 
         $requests = $this->applyRequesterSearch(
             BarangayDocumentRequest::query()->where('status', 'claimed'),
@@ -321,9 +312,74 @@ class DocumentRequestController extends Controller
             ->paginate(25)
             ->withQueryString();
 
+        $claimedByType = BarangayDocumentRequest::query()
+            ->where('status', 'claimed')
+            ->whereBetween('claimed_at', [$periodStart, $periodEnd])
+            ->with(['resident:id,name,email,contact_number', 'documentType:id,name'])
+            ->orderBy('claimed_at')
+            ->get([
+                'id',
+                'user_id',
+                'document_type_id',
+                'claimed_at',
+                'claimed_by_name',
+                'payment_method',
+                'contact_number',
+                'address',
+                'zone',
+            ])
+            ->groupBy(fn (BarangayDocumentRequest $record): string => $record->documentType->name)
+            ->sortKeys()
+            ->map(function ($records, string $type): array {
+                return [
+                    'type' => $type,
+                    'total' => $records->count(),
+                    'records' => $records->map(function (BarangayDocumentRequest $record): array {
+                        $residentName = $record->claimed_by_name
+                            ?: $record->resident?->name
+                            ?: collect([
+                                $record->first_name,
+                                $record->middle_name,
+                                $record->surname,
+                            ])
+                                ->filter(fn (?string $name): bool => is_string($name) && trim($name) !== '')
+                                ->map(fn (string $name): string => trim($name))
+                                ->implode(' ');
+
+                        $address = collect([
+                            $record->zone,
+                            $record->address,
+                        ])
+                            ->filter(fn (?string $value): bool => is_string($value) && trim($value) !== '')
+                            ->map(fn (string $value): string => trim($value))
+                            ->implode(', ');
+
+                        return [
+                            'resident_name' => $residentName !== '' ? $residentName : 'Unknown resident',
+                            'contact_number' => $record->contact_number ?? $record->resident?->contact_number,
+                            'email' => $record->resident?->email ?? '',
+                            'address' => $address !== '' ? $address : null,
+                            'claimed_at' => $record->claimed_at?->toIso8601String(),
+                            'payment' => $record->payment_method,
+                            'document_reference' => null,
+                        ];
+                    })->values(),
+                ];
+            })
+            ->values();
+        $branding = LandingPageContent::current();
+
         return Inertia::render('secretary/claimed-documents', [
             'requests' => $requests,
             'search' => $search ?? '',
+            'report' => [
+                'month' => $month,
+                'month_label' => $periodStart->translatedFormat('F Y'),
+                'categories' => $claimedByType,
+                'total' => $claimedByType->sum('total'),
+                'barangay_name' => $branding['site_name'],
+                'logo_image' => $branding['logo_image'],
+            ],
         ]);
     }
 
@@ -373,11 +429,13 @@ class DocumentRequestController extends Controller
             throw new \RuntimeException('The resident ID image could not be opened.');
         }
 
+        $mimeType = Storage::disk('local')->mimeType($path);
+
         return response()->stream(function () use ($stream): void {
             fpassthru($stream);
             fclose($stream);
         }, 200, [
-            'Content-Type' => Storage::disk('local')->mimeType($path) ?? 'application/octet-stream',
+            'Content-Type' => is_string($mimeType) ? $mimeType : 'application/octet-stream',
             'Content-Disposition' => 'inline; filename="'.$filename.'"',
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, no-store',
@@ -406,11 +464,13 @@ class DocumentRequestController extends Controller
             $documentRequest,
         );
 
+        $mimeType = Storage::disk('local')->mimeType($path);
+
         return response()->stream(function () use ($stream): void {
             fpassthru($stream);
             fclose($stream);
         }, 200, [
-            'Content-Type' => Storage::disk('local')->mimeType($path) ?? 'application/octet-stream',
+            'Content-Type' => is_string($mimeType) ? $mimeType : 'application/octet-stream',
             'Content-Disposition' => 'inline; filename="gcash-receipt-request-'.$documentRequest->id.'.'.pathinfo($path, PATHINFO_EXTENSION).'"',
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, no-store',
@@ -686,10 +746,8 @@ class DocumentRequestController extends Controller
                 return;
             }
 
-            if ($record->status === 'ready' && $record->identity_status !== 'verified') {
-                throw ValidationException::withMessages([
-                    'identity_status' => 'Verify the requester’s identity before recording payment for a ready document.',
-                ]);
+            if ($record->payment_status !== 'unpaid') {
+                return;
             }
 
             $record->update([
@@ -847,8 +905,12 @@ class DocumentRequestController extends Controller
     {
         $setting = GcashPaymentSetting::query()->first();
 
-        return filled($setting?->gcash_number)
-            && is_string($setting?->qr_code_path)
+        if ($setting === null) {
+            return false;
+        }
+
+        return filled($setting->gcash_number)
+            && is_string($setting->qr_code_path)
             && Storage::disk('public')->exists($setting->qr_code_path);
     }
 

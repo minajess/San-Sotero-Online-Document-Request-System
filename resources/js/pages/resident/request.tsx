@@ -18,13 +18,6 @@ type DocumentTypeOption = {
 };
 
 type ResidentDetails = {
-    first_name: string | null;
-    middle_name: string | null;
-    surname: string | null;
-    birthdate: string | null;
-    address: string | null;
-    zone: string | null;
-    sex: string | null;
     contact_number: string | null;
 };
 
@@ -41,21 +34,12 @@ export default function CreateDocumentRequest({
         configured: boolean;
     };
 }) {
-    const middleNameNotApplicable = !resident.middle_name;
     const form = useForm<{
         document_type_id: number | "";
         purpose: string;
         payment_method: "cash" | "gcash" | "";
         payment_receipt: File | null;
         contact_number: string;
-        first_name: string;
-        middle_name: string;
-        middle_name_na: boolean;
-        surname: string;
-        birthdate: string;
-        address: string;
-        zone: string;
-        sex: string;
         id_document_front: File | null;
         id_document_back: File | null;
         id_is_valid: boolean;
@@ -65,14 +49,6 @@ export default function CreateDocumentRequest({
         payment_method: "",
         payment_receipt: null,
         contact_number: resident.contact_number ?? "",
-        first_name: resident.first_name ?? "",
-        middle_name: resident.middle_name ?? "",
-        middle_name_na: middleNameNotApplicable,
-        surname: resident.surname ?? "",
-        birthdate: resident.birthdate?.slice(0, 10) ?? "",
-        address: resident.address ?? "",
-        zone: resident.zone ?? "",
-        sex: resident.sex ?? "",
         id_document_front: null,
         id_document_back: null,
         id_is_valid: false,
@@ -80,6 +56,20 @@ export default function CreateDocumentRequest({
 
     const submit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        const contactDigits = form.data.contact_number.match(/\d/g)?.length ?? 0;
+        if (
+            !/^\+?[0-9][0-9\s().-]*$/.test(form.data.contact_number.trim()) ||
+            contactDigits < 7 ||
+            contactDigits > 15
+        ) {
+            form.setError(
+                "contact_number",
+                "Enter a valid phone number with 7-15 digits, such as 09171234567 or +63 917 123 4567.",
+            );
+            return;
+        }
+
+        form.clearErrors("contact_number");
         form.post("/resident/requests");
     };
 
@@ -97,7 +87,7 @@ export default function CreateDocumentRequest({
                     </Link>
                     <h1 className="text-3xl font-black">Request a document</h1>
                     <p className="mt-2 text-slate-500 dark:text-slate-400">
-                        Complete the details below. The barangay secretary will review your request.
+                        Complete the details below.
                     </p>
                 </div>
 
@@ -141,7 +131,7 @@ export default function CreateDocumentRequest({
                                 rows={2}
                                 value={form.data.purpose}
                                 onChange={(event) => form.setData("purpose", event.target.value)}
-                                placeholder="Tell us what you need this document for."
+                                placeholder="Tell us the purpose of your document request."
                                 className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                             />
                             {form.errors.purpose && (
@@ -153,96 +143,27 @@ export default function CreateDocumentRequest({
                     </div>
 
                     <fieldset className="space-y-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                        <legend className="px-1 text-sm font-semibold">
-                            Your personal details
-                        </legend>
-                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                            <RequestField
-                                label="First name"
-                                value={form.data.first_name}
-                                onChange={(value) => form.setData("first_name", value)}
-                                error={form.errors.first_name}
-                            />
-                            <RequestField
-                                label="Surname"
-                                value={form.data.surname}
-                                onChange={(value) => form.setData("surname", value)}
-                                error={form.errors.surname}
-                            />
-                            <div>
-                                <RequestField
-                                    label="Middle name"
-                                    value={form.data.middle_name}
-                                    onChange={(value) => form.setData("middle_name", value)}
-                                    error={form.errors.middle_name}
-                                    required={!form.data.middle_name_na}
-                                    disabled={form.data.middle_name_na}
-                                />
-                                <label className="mt-2 flex items-center gap-2 text-sm font-normal text-slate-600 dark:text-slate-300">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.data.middle_name_na}
-                                        onChange={(event) => {
-                                            const notApplicable = event.target.checked;
-                                            form.setData("middle_name_na", notApplicable);
-                                            if (notApplicable) form.setData("middle_name", "");
-                                        }}
-                                        className="rounded border-slate-300 text-emerald-600"
-                                    />
-                                    N/A — no middle name
-                                </label>
-                            </div>
-                            <RequestField
-                                label="Birthdate"
-                                type="date"
-                                value={form.data.birthdate}
-                                onChange={(value) => form.setData("birthdate", value)}
-                                error={form.errors.birthdate}
-                                max={new Date().toISOString().slice(0, 10)}
-                            />
-                            <RequestField
-                                label="Address"
-                                value={form.data.address}
-                                onChange={(value) => form.setData("address", value)}
-                                error={form.errors.address}
-                            />
-                            <RequestField
-                                label="Zone"
-                                value={form.data.zone}
-                                onChange={(value) => form.setData("zone", value)}
-                                error={form.errors.zone}
-                            />
-                            <label className="block text-sm font-semibold">
-                                Sex
-                                <select
-                                    required
-                                    value={form.data.sex}
-                                    onChange={(event) => form.setData("sex", event.target.value)}
-                                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                                >
-                                    <option value="" disabled>
-                                        Select sex
-                                    </option>
-                                    <option value="Female">Female</option>
-                                    <option value="Male">Male</option>
-                                </select>
-                                {form.errors.sex && <FieldError message={form.errors.sex} />}
-                            </label>
+
+                        <div className="max-w-md">
                             <RequestField
                                 label="Contact number"
                                 type="tel"
                                 value={form.data.contact_number}
-                                onChange={(value) => form.setData("contact_number", value)}
+                                onChange={(value) => {
+                                    form.setData("contact_number", value);
+                                    form.clearErrors("contact_number");
+                                }}
                                 error={form.errors.contact_number}
-                                placeholder="09XXXXXXXXX"
-                                pattern="(?:09\d{9}|\+639\d{9}|639\d{9})"
+                                placeholder="09XXXXXXXXX or +63 917 123 4567"
+                                maxLength={20}
+                                invalidMessage="Enter your contact number."
                             />
                         </div>
                     </fieldset>
 
                     <fieldset className="space-y-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                         <legend className="px-1 text-sm font-semibold">
-                            Government-issued ID images
+                            Government-issued ID
                         </legend>
                         <div
                             role="alert"
@@ -252,8 +173,6 @@ export default function CreateDocumentRequest({
                             <p>
                                 Upload clear pictures of the{" "}
                                 <strong>front and back of your actual government-issued ID</strong>.
-                                Images that are not an ID, are unreadable, or do not show both sides
-                                may be rejected by the secretary.
                             </p>
                         </div>
                         <div className="grid gap-4 md:grid-cols-2">
@@ -286,8 +205,7 @@ export default function CreateDocumentRequest({
                                 }
                                 className="mt-0.5 rounded border-slate-300 text-emerald-600"
                             />
-                            I confirm that these are clear pictures of the front and back of my
-                            government-issued ID.
+                            I confirm that these are my government-issued ID.
                         </label>
                         {form.errors.id_is_valid && (
                             <FieldError message={form.errors.id_is_valid} />
@@ -373,7 +291,6 @@ export default function CreateDocumentRequest({
                         <FileText className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
                         <p>
                             Your request will be marked pending until the secretary reviews it.
-                            Cash payments are recorded by the barangay staff.
                         </p>
                     </div>
 
@@ -410,6 +327,7 @@ function RequestField({
     type = "text",
     required = true,
     disabled = false,
+    invalidMessage,
     ...inputProps
 }: {
     label: string;
@@ -419,9 +337,10 @@ function RequestField({
     type?: string;
     required?: boolean;
     disabled?: boolean;
+    invalidMessage?: string;
     placeholder?: string;
-    pattern?: string;
     max?: string;
+    maxLength?: number;
 }) {
     return (
         <label className="block text-sm font-semibold">
@@ -431,7 +350,15 @@ function RequestField({
                 disabled={disabled}
                 type={type}
                 value={value}
-                onChange={(event) => onChange(event.target.value)}
+                onChange={(event) => {
+                    event.currentTarget.setCustomValidity("");
+                    onChange(event.target.value);
+                }}
+                onInvalid={
+                    invalidMessage
+                        ? (event) => event.currentTarget.setCustomValidity(invalidMessage)
+                        : undefined
+                }
                 {...inputProps}
                 className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal text-slate-900 disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:disabled:bg-slate-800"
             />
@@ -491,16 +418,11 @@ function IdImageField({
                             type="button"
                             className="mt-2 block text-xs font-semibold text-emerald-700 underline"
                         >
-                            Preview selected ID
+                            View Selected ID
                         </button>
                     </DialogTrigger>
                     <DialogContent className="w-[calc(100%-2rem)] max-w-4xl">
-                        <DialogHeader>
-                            <DialogTitle>{label} preview</DialogTitle>
-                            <DialogDescription>
-                                Check that this is the correct, readable side of your ID.
-                            </DialogDescription>
-                        </DialogHeader>
+
                         <div className="flex max-h-[70vh] justify-center overflow-auto rounded-md bg-slate-100 p-2 dark:bg-slate-950">
                             <img
                                 src={previewUrl}
@@ -552,8 +474,7 @@ function GcashReceiptField({
                 />
                 {error && <FieldError message={error} />}
                 <span className="mt-1 block font-normal text-slate-500 dark:text-slate-400">
-                    Upload a JPG, PNG, or WebP image up to 5 MB. The secretary will review the
-                    receipt before marking payment as paid.
+                    Upload a JPG, PNG, or WebP image up to 5 MB.
                 </span>
             </label>
             {file && (
@@ -569,17 +490,11 @@ function GcashReceiptField({
                                     type="button"
                                     className="font-semibold text-emerald-700 underline"
                                 >
-                                    Preview selected GCash receipt
+                                    View receipt
                                 </button>
                             </DialogTrigger>
                             <DialogContent className="w-[calc(100%-2rem)] max-w-4xl">
-                                <DialogHeader>
-                                    <DialogTitle>GCash receipt preview</DialogTitle>
-                                    <DialogDescription>
-                                        Check that this is the correct payment receipt before
-                                        submitting your request.
-                                    </DialogDescription>
-                                </DialogHeader>
+
                                 <div className="flex max-h-[70vh] justify-center overflow-auto rounded-md bg-slate-100 p-2 dark:bg-slate-950">
                                     <img
                                         src={previewUrl}

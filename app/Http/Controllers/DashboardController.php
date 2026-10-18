@@ -13,9 +13,7 @@ class DashboardController extends Controller
     public function admin(Request $request): Response
     {
         $totalUsers = User::count();
-
         $totalResidents = User::where('role', 'resident')->count();
-
         $totalStaff = User::whereIn('role', [
             'secretary',
             'super_admin',

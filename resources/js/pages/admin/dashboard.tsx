@@ -48,48 +48,6 @@ export default function AdminDashboard() {
 
             <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
                 {/* Header */}
-                <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-                    <div className="flex h-16 items-center justify-between">
-                        <Link href="/" className="flex items-center gap-3">
-                            <img
-                                src="/brgyLogo.png"
-                                alt="Barangay San Sotero"
-                                className="h-11 w-11 rounded-full border-2 border-emerald-100 object-cover dark:border-emerald-900"
-                            />
-
-                            <div>
-                                <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                                    Barangay San Sotero
-                                </p>
-
-                                <h1 className="font-bold text-slate-900 dark:text-white">
-                                    Document Request System
-                                </h1>
-                            </div>
-                        </Link>
-
-                        <div className="flex items-center gap-4">
-                            <Link
-                                href="/admin/requests"
-                                className="relative rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
-                            >
-                                <Bell className="h-5 w-5" />
-
-                                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-emerald-500" />
-                            </Link>
-
-                            <div className="hidden border-l border-slate-200 pl-4 dark:border-slate-700 sm:block">
-                                <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                                    {user?.name ?? "Super Administrator"}
-                                </p>
-
-                                <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    Super Administrator
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </header>
 
                 <main className="w-full py-8">
                     {/* Welcome */}
@@ -215,12 +173,6 @@ export default function AdminDashboard() {
                                 href="/admin/settings"
                             />
 
-                            <ManagementCard
-                                icon={FileText}
-                                title="Landing Page"
-                                description="Edit the public website content, images, links, and section order."
-                                href="/admin/landing-page"
-                            />
                         </div>
                     </section>
 

@@ -51,8 +51,7 @@ export default function SettingsPage({ gcashPayment }: { gcashPayment: GcashPaym
                             <div>
                                 <h2 className="font-bold">GCash payment details</h2>
                                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                                    Residents will see these details when they select GCash. Their
-                                    payment remains unpaid until a secretary verifies the reference.
+                                    Residents will see these details when they select GCash.
                                 </p>
                             </div>
                         </div>

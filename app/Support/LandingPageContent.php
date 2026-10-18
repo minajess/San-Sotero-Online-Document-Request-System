@@ -89,20 +89,28 @@ class LandingPageContent
     public static function current(): array
     {
         $defaults = self::defaults();
-        $stored = LandingPageSetting::query()->find(1)?->content ?? [];
-        $content = array_replace($defaults, $stored);
+        $stored = LandingPageSetting::query()->find(1);
+
+        /** @var array<string, mixed> $storedContent */
+        $storedContent = is_array($stored?->content) ? $stored->content : [];
+
+        $content = array_replace_recursive($defaults, $storedContent);
         $content['sections'] = [];
 
+        /** @var array<string, mixed> $storedSections */
+        $storedSections = is_array($storedContent['sections'] ?? null) ? $storedContent['sections'] : [];
+
         foreach ($defaults['sections'] as $key => $sectionDefaults) {
-            $content['sections'][$key] = array_replace(
-                $sectionDefaults,
-                $stored['sections'][$key] ?? [],
-            );
+            $storedSection = is_array($storedSections[$key] ?? null) ? $storedSections[$key] : [];
+            $content['sections'][$key] = array_replace_recursive($sectionDefaults, $storedSection);
         }
 
         foreach (['logo_image', 'hero_image'] as $imageKey) {
-            if (! str_starts_with($content[$imageKey], '/') && ! preg_match('/^https?:\/\//i', $content[$imageKey])) {
-                $content[$imageKey] = asset('storage/'.$content[$imageKey]);
+            $value = $content[$imageKey] ?? null;
+
+            if (is_string($value)
+                && ! str_starts_with($value, '/')) {
+                $content[$imageKey] = asset('storage/'.$value);
             }
         }
 

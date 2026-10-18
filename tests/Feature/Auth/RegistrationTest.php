@@ -1,7 +1,6 @@
 <?php
 
 use Laravel\Fortify\Features;
-use App\Models\User;
 
 beforeEach(function () {
     $this->skipUnlessFortifyHas(Features::registration());

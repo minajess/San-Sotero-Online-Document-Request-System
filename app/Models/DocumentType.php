@@ -22,6 +22,9 @@ class DocumentType extends Model
         ];
     }
 
+    /**
+     * @return HasMany<DocumentRequest, $this>
+     */
     public function documentRequests(): HasMany
     {
         return $this->hasMany(DocumentRequest::class);

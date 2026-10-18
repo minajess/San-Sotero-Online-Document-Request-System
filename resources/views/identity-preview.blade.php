@@ -17,14 +17,7 @@
 
         * { box-sizing: border-box; }
         body { margin: 0; min-height: 100vh; }
-        header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 14px 20px;
-            background: white;
-            border-bottom: 1px solid #e2e8f0;
-        }
+
         header img { width: 40px; height: 40px; object-fit: contain; }
         header strong { display: block; font-size: 14px; }
         header span { display: block; margin-top: 3px; color: #64748b; font-size: 12px; }
@@ -46,13 +39,6 @@
     </style>
 </head>
 <body>
-    <header>
-        <img src="/brgyLogo.png" alt="Barangay San Sotero logo">
-        <div>
-            <strong>Barangay San Sotero</strong>
-            <span>{{ $sideLabel }} · Request #{{ $requestId }}</span>
-        </div>
-    </header>
     <main>
         <img src="{{ $imageUrl }}" alt="{{ $sideLabel }} image for request {{ $requestId }}">
     </main>
