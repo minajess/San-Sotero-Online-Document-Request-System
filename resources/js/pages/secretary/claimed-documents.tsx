@@ -109,11 +109,15 @@ export default function ClaimedDocumentsPage({
                         className="no-print flex flex-wrap items-end gap-3"
                         onSubmit={(event) => {
                             event.preventDefault();
-                            setIsReportPreviewOpen(true);
                             router.get(
                                 "/secretary/claimed-documents",
                                 { search: search || undefined, month },
-                                { preserveState: true, preserveScroll: true, replace: true },
+                                {
+                                    preserveState: true,
+                                    preserveScroll: true,
+                                    replace: true,
+                                    onSuccess: () => setIsReportPreviewOpen(true),
+                                },
                             );
                         }}
                     >
@@ -122,7 +126,25 @@ export default function ClaimedDocumentsPage({
                             <input
                                 type="month"
                                 value={month}
-                                onChange={(event) => setMonth(event.target.value)}
+                                onChange={(event) => {
+                                    const selectedMonth = event.target.value;
+                                    setMonth(selectedMonth);
+
+                                    if (!selectedMonth) return;
+
+                                    router.get(
+                                        "/secretary/claimed-documents",
+                                        {
+                                            search: search || undefined,
+                                            month: selectedMonth,
+                                        },
+                                        {
+                                            preserveState: true,
+                                            preserveScroll: true,
+                                            replace: true,
+                                        },
+                                    );
+                                }}
                                 required
                                 className="mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                             />

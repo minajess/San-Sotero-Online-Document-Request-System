@@ -1094,6 +1094,58 @@ test('secretaries record a paid ready claim separately with requester name and c
             ->has('requests.0.claimed_at'));
 });
 
+test('monthly claimed reports include only that month and group by requested document type', function () {
+    $resident = User::factory()->create(['role' => 'resident']);
+    $secretary = User::factory()->create(['role' => 'secretary']);
+    $typeA = DocumentType::query()->create([
+        'name' => 'Monthly Report Type A',
+        'description' => 'First report category.',
+        'fee' => 0,
+        'is_active' => true,
+    ]);
+    $typeB = DocumentType::query()->create([
+        'name' => 'Monthly Report Type B',
+        'description' => 'Second report category.',
+        'fee' => 0,
+        'is_active' => true,
+    ]);
+
+    foreach ([
+        [$typeA, '2026-09-01 00:00:00', 'September A'],
+        [$typeB, '2026-09-30 23:59:59', 'September B'],
+        [$typeB, '2026-10-01 00:00:00', 'October B'],
+    ] as [$documentType, $claimedAt, $claimant]) {
+        $resident->documentRequests()->create([
+            'document_type_id' => $documentType->id,
+            'purpose' => 'Monthly report test',
+            'status' => 'claimed',
+            'payment_method' => 'cash',
+            'payment_status' => 'paid',
+            'claimed_at' => $claimedAt,
+            'claimed_by_name' => $claimant,
+            'processed_by' => $secretary->id,
+        ]);
+    }
+
+    $this->actingAs($secretary)
+        ->get(route('secretary.claimed-documents', ['month' => '2026-09']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('secretary/claimed-documents')
+            ->where('report.month', '2026-09')
+            ->where('report.total', 2)
+            ->where('requests.total', 2)
+            ->has('requests.data', 2)
+            ->where('requests.data.0.document_type.name', 'Monthly Report Type B')
+            ->where('requests.data.1.document_type.name', 'Monthly Report Type A')
+            ->has('report.categories', 2)
+            ->where('report.categories.0.type', 'Monthly Report Type A')
+            ->where('report.categories.0.total', 1)
+            ->where('report.categories.0.records.0.resident_name', 'September A')
+            ->where('report.categories.1.type', 'Monthly Report Type B')
+            ->where('report.categories.1.total', 1)
+            ->where('report.categories.1.records.0.resident_name', 'September B'));
+});
+
 test('secretaries cannot claim an unpaid request or use general updates to mark it claimed', function () {
     $resident = User::factory()->create(['role' => 'resident']);
     $secretary = User::factory()->create(['role' => 'secretary']);

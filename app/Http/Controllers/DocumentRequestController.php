@@ -301,7 +301,9 @@ class DocumentRequestController extends Controller
         $periodEnd = $periodStart->copy()->endOfMonth();
 
         $requests = $this->applyRequesterSearch(
-            BarangayDocumentRequest::query()->where('status', 'claimed'),
+            BarangayDocumentRequest::query()
+                ->where('status', 'claimed')
+                ->whereBetween('claimed_at', [$periodStart, $periodEnd]),
             $search,
         )
             ->with([
